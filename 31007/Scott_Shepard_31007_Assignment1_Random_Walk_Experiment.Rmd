@@ -1,0 +1,223 @@
+---
+title: 'Week 1: Random Walk Experiment'
+author: "Scott Shepard"
+date: "4/1/2018"
+output:
+  html_document: default
+subtitle: MScA, Statistical Analysis (31007)
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Convergence of probability of tail to 0.5
+
+Setting the seed controls the starting point for the pseduo-
+random number generator. This way each time this code is run
+the order of flips will be the same.
+```{r}
+set.seed(12345)  
+```
+
+Set the number of total flips to a high but reasonable number
+```{r}
+nFlips <- 100000 
+```
+
+The function sample will ranndomly draw from the first argument, 
+the vector c(0, 1), nFlips number of times with replacement. This 
+simulates flipping a coin nFlips times.
+```{r}
+Flips <- sample(0:1, nFlips, repl=T) 
+```
+
+Trajectory is a vector that contains all the tails flips up to that point in time.
+The function cumsum is cumulative sum with sums the entire vector up to that element
+inclusive.
+```{r}
+Trajectory <- cumsum(Flips) 
+```
+
+Frequency is calculated by dividing the number of tails up to that element's point
+by the length up to that point. So at the tenth flip there are 7 tails so far which
+makes the frequency at that point 0.7.
+Thus we have a vector of that total percentage of tails shown at every point in time.
+```{r}
+freq <- Trajectory/(1:nFlips)
+```
+
+The function plot is plotting a continous line (type="l") along the x, y inputs which
+are a vector 1-nFlips and the y is the total frequeuncy at that point. 
+Lines will plot a line on the existing plot object. Here it is adding a 50% line which 
+is the expected value at any given point in time.
+```{r}
+plot(1:length(freq), freq, ylim=c(.4,1), type="l", ylab="Frequency", xlab="Sample Length")
+lines(c(0, nFlips), c(0.5, 0.5))
+```
+
+Repeat the same plot but zoomed in in the first 4000 flips.
+```{r}
+plot(1:4000, freq[1:4000], ylim=c(.4,1), type="l", ylab="Frequency", xlab="Sample Length") 
+lines(c(0, 4000), c(0.5, 0.5))
+```
+
+What we see in the plots is the convergence of the frequency on 0.5. Initially 
+with only a few flips the percentage of tails shown can be as high as 70% but 
+with enough flips it becomes harder and harder for the frequency to deviate 
+very far from the 0.5 line.
+
+I would conclude that this coin is definitely fair.
+
+# 2. Check your intuition about random walks
+
+## 2.1. One trajectory
+
+In this simulation instead of just flipping a coin there is a payoff of $1 for 
+tails and a loss of $1 for heads. Simulate this by generating all the flips, 
+the subtracting 0.5 from each (so all the 0=>-0.5 and the 1=>0.5) then multiply
+by two to get the full dollar payoffs.
+
+```{r} 
+set.seed(12345)
+
+nFlips <- 1000000
+Flips <- (sample(0:1, nFlips, repl=T) - 0.5)*2
+```
+
+** Find at least one alternative way of simulating variable Flips. **
+
+You could also sample the -1 and 1 flips directly
+```{r}
+set.seed(12345)
+
+Flips <- sample(c(-1, 1), nFlips, repl=T)
+```
+
+**Check your intuition by answering questions before calculation:**
+
+- How much do you expect the trajectory of wealth to deviate from zero?
+
+I would not expect the trajectory to deviate very much from zero. In the 
+previous round by 100,000 flips there was only a deviation of 84 from exactly
+a 50% tails proportion. With one million flips I would only expect a maximum 
+of $1,000 payoff or debt to be accumulated.
+
+- How long do you expect it to stay on one side above or below zero?
+
+I would expect rougly 50% of the time to be spent above zero and 50% of the 
+time to be spent below zero.
+
+``` {r}
+oneTrajectory <- cumsum(Flips)
+plot(oneTrajectory, ylim=c(-1000, 1000), type="l")
+lines(c(0, nFlips), c(0, 0))
+```
+
+I'm somewhat surprised how much time above zero the payoff spends. It spends 
+80% of the sequence in the positive. I would have thought there would be more 
+back and forth.  
+The total payoff is about what I expected though. At it's peak it was $931, 
+close to the $1,000 limit I guessed.
+
+Repeat the experiment multiple times.
+
+
+``` {r}
+par(mfrow = c(2, 2))
+
+Flips2 <- sample(c(-1, 1), nFlips, repl=T)
+twoTrajectory <- cumsum(Flips2)
+plot(twoTrajectory, ylim=c(-1000, 1000), type="l")
+lines(c(0, nFlips), c(0, 0))
+
+Flips3 <- sample(c(-1, 1), nFlips, repl=T)
+threeTrajectory <- cumsum(Flips3)
+plot(threeTrajectory, ylim=c(-1000, 1000), type="l")
+lines(c(0, nFlips), c(0, 0))
+
+Flips4 <- sample(c(-1, 1), nFlips, repl=T)
+fourTrajectory <- cumsum(Flips4)
+plot(fourTrajectory, ylim=c(-1000, 1000), type="l")
+lines(c(0, nFlips), c(0, 0))
+
+Flips5 <- sample(c(-1, 1), nFlips, repl=T)
+fiveTrajectory <- cumsum(Flips5)
+plot(fiveTrajectory, ylim=c(-1000, 1000), type="l")
+lines(c(0, nFlips), c(0, 0))
+```
+
+It seems like sometimes the trajectory stays above or below zero, and sometimes
+it bounces around or stays close to zero.  
+The final payoff for all of these games is very close to zero though, well 
+within the $1000 limits.
+
+## 2.2. Multiple trajectories
+
+I would expect not much deviation from zero on the final number. Maybe less
+than 1%?
+
+The function matrix transforms the full million list of flips into a 2000x500
+matrix where each column is an individual run. The the function apply iterates
+over each column and the final argument cumsum computes the cumulative sum 
+which creates the trajectory.
+
+Probabilites are calculated by finding the final element in the run and 
+comparing (against less than five or greater than or equal to 25). This will
+produce a vector of booleans which can be summed (True=1, False=0), then divided
+by the total length of 2000 to get the final probability.
+
+```{r}
+Trajectories2000by500<-t(apply(matrix(Flips,ncol=500),1,cumsum))
+dim(Trajectories2000by500)
+
+(probability.less.than.5<-sum(abs(Trajectories2000by500[,500])<5)/2000)
+ 
+(probability.greater.than.25<-sum(abs(Trajectories2000by500[,500])>=25)/2000)
+```
+
+Intestingly, the percentage of runs that ended 25 or more away from zero is 
+higher than those that ended within five of zero. And both probability seem
+quite high. I would have thought that it would be clustered much more tightly
+around zero. I'm pretty surpised by how far away these are landing.
+
+I guess deviations of 1% or 5% are pretty common. 
+
+I'm going to plot all the final trajectories on a histogram.
+
+```{r}
+hist(Trajectories2000by500[, 500])
+```
+
+The trajectories appear to be normally distributed. It looks like 95% of cases
+are covered within a 10% deviation. 
+
+```{r}
+(probability.greater.than.50<-sum(abs(Trajectories2000by500[,500])<50)/2000)
+```
+
+So I probably shouldn't have been surprised with relatively large amounts of 
+deviation at just 1%.
+
+## 2.3. Time on one side
+
+I would expect about half of the time to be spent above or below zero.
+
+Apply here is applying an anonymous function across each column of the matrix.
+The anonymous function is comparing each element in the column against zero and
+summing the total success counts.
+
+```{r}
+timeAbove<-apply(Trajectories2000by500,1,function(z) sum(z>0))
+hist(timeAbove)
+```
+Well that's fairly surprising. I would have expected much more clustering 
+next to zero.  
+My intuition on this was totally off. Maybe the runs aren't long enough? 
+2000 flips isn't that many. Over the much longer run I would expect these to 
+pretty much all converge to zero. I think what's happening here is that an
+initial perturbation isn't corrected by the time the end of the trial has run 
+out. 
+
+What we are observing here, after much googling, is the third arcsine law. 
+It's weird an unintuitive.

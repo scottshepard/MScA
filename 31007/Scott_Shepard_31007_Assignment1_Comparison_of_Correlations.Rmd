@@ -1,0 +1,83 @@
+---
+title: 'Week 1: Comparison of Correlations'
+author: "Scott Shepard"
+date: "4/1/2018"
+output:
+  pdf_document: default
+  html_document: default
+subtitle: MScA, Statistical Analysis (31007)
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Comparison of correlations
+
+Use the given simulated data to:
+1. Read in the data set  
+2. Plot the simulated pairs  
+3. Calculate sample correlations and determination coefficients  
+4. Interactive testing portion  
+
+## Read the data
+
+```{r read_data}
+datapath <- "~/Dropbox/MScA/31007 - Stats Analysis/Assignment 1"
+data <- read.csv(file.path(datapath, "Week1_Correlation_Comparison_Project_Data.csv"))
+head(data)
+```
+
+## Plot the simulated pairs
+
+```{r plot_pairs}
+par(mfrow = c(2, 2))
+with (data, { 
+      plot(Case1.X, Case1.Y, ylim = c(-8, 8))
+      plot(Case2.X, Case2.Y, ylim = c(-6, 6))
+      plot(Case3.X, Case3.Y, ylim = c(-1, 3))
+      plot(Case4.X, Case4.Y, ylim = c(0, 2.5))
+})
+```
+
+## Calculate sample correlations and determination coefficients
+
+```{r sample_cor_and_var}
+with(data, {
+  Correlation.Case1 <- cor(Case1.X, Case1.Y)
+  Correlation.Case2 <- cor(Case2.X, Case2.Y)
+  Correlation.Case3 <- cor(Case3.X, Case3.Y)
+  Correlation.Case4 <- cor(Case4.X, Case4.Y)
+  rbind(cbind(Correlation.Case1, 
+              Correlation.Case2, 
+              Correlation.Case3, 
+              Correlation.Case4),
+        cbind(Correlation.Case1^2,
+              Correlation.Case2^2,
+              Correlation.Case3^2,
+              Correlation.Case4^2))
+})
+```
+
+# Test. Relationship between slope and correlation
+
+## Read the sample data
+```{r test_read_data}
+dat <- read.table(file.path(datapath, 'Week1_Test_Sample.csv'), header=TRUE)
+```
+
+## Calculate statistics
+```{r test_calculate_stats}
+sdX <- sd(dat$x)
+sdY <- sd(dat$y)
+cXY <- cor(dat$x, dat$y)
+a   <- cXY * sdY / sdX
+result <- data.frame(sdX=sdX, sdY=sdY, cXY=cXY, a=a)
+result
+```
+
+## Write result to a file
+```{r test_output}
+write.table(result, file = file.path(datapath, 'result.csv'), row.names = F)
+```
+
