@@ -80,6 +80,11 @@ Sample.histogram
 
 **What does the histogram tell you about the distribution? Is it consistent with the goal of simulation?**
 
+In 1.4 we turned our random numbers into a uniform distribution of random numbers.
+We would expect a histogram of the sample to be flat across all buckets because a
+uniform distribuion is evenly distributed. The histogram here clearly shows an
+even and uniform distribution so we know that our transformation was successful.
+
 Estimate mean and standard deviation of Sample.histogram$density.
 
 ```{r, 2.1.1-3}
@@ -99,6 +104,17 @@ abline(h=Sample.histogram.mean-1.96*Sample.histogram.sd,col="red",lty=2)
 
 **What does the graph tell you about the observed distribution?**
 
+In any distribution we want the total area under the curve to be equal to one.
+With a uniform distribtion, bounded by {0, 1}, we want the density of each bucket
+to be equal to one because then the total value of probability curve is 1 * 1 = 1. 
+
+In this scenario the mean value of the density of each bucket should be one, 
+which is what we get here. The standard deviation is a measure of average 
+distance from the mean and in a uniform distribution is should be quite small. If 
+it is small that means that all the densities are about the same, hennce uniform. 
+Here the sd is 0.08 which I think is pretty small. I'm not totally sure how to 
+evaluate that but it looks right.
+
 Estimate moments of Sample.
 
 ```{r, 2.1.1-6}
@@ -111,6 +127,15 @@ Estimate moments of Sample.
 
 **What do you conclude about the estimated distribution from the moments?**
 
+In a uniform distribution the mean will be halfway between the interval bounds.
+Here we are bounded at {0, 1} so the mean should be 0.5. With a mean of 0.516 I'd 
+say that is about what you expect.
+
+The variance of a uniform distribution is 1/12 (b-a)^2 where the interval = {a, b}.
+
+Here that turns into 1/12 or about 0.083. The computed variance is 0.084 so that's 
+spot on.
+
 Check the summary of the simulated sample.
 
 ```{r, 2.1.1-8}
@@ -118,6 +143,12 @@ summary(Sample)
 ```
 
 **What do you think is the best way of estimating uniform distribution over unknown interval?**
+
+I think computing the mean and the variance using the min and max as your bounds would 
+give a pretty good estimation. If they line up nicely then you could compute the
+histogram and check that the densities in each bucket are about the same. If the 
+mean and variance are wildly off of what you would expect then there is no need 
+to go farther, you already know that the distribution is not uniform.
 
 ### 2.1.2 Repeat the same steps to test uniformity of the sample from Random.org
 
@@ -155,3 +186,154 @@ abline(h=Sample.histogram.mean-1.96*Sample.histogram.sd,col="red",lty=2)
 ```{r, 2.1.2-8}
 summary(dataFromRandom.dec)
 ```
+
+Here the mean and variance are in line with expectations for a uniform distribution.
+**However** the histogram paints a different picture. The standard deviation here
+is more than three times what the standard deviation of the densities was in 
+the previous uniform distribution. This data does not appear to be uniform. I would
+recommend doing the same uniform transformation we did before we wanted to get
+a uniform distribution.
+
+## 2.2 Test independence of the sequence of zeros and ones
+
+### 2.2.1 Turning point test
+
+Turning point test is used to check if a sequence of numbers is i.i.d. (independent identically distributed).
+The test is based on the number of turning points in the sequence.
+The number of turning points is the number of maxima and minima in the series.
+Let \(T\) be the number of turning points in a sample of length \(n\) large enough.
+Then the statistic of the test \[z=\frac{T-\frac{2n-4}{3}}{\sqrt{\frac{16n-29}{90}}}\] has standard normal distribution.
+
+The test is performed by `turning.point.test()` in package randtests
+
+```{r}
+turning.point.test(dataFromRandom.dec)
+```
+
+The null hypothesis tested by turning point test is randomness (i.i.d.). The alternative is serial correlation in the sequence. Thus, if the test returns a very small p-value the randomness needs to be rejected.
+
+### 2.2.2 Test frequency by Monobit test
+
+To perform Monobit test you need to transform your {0,1} sample into {-1,1}.
+Illustrate the test on the sequence simulated in the previous lecture.
+
+We created the sequence of coin tosses:
+
+```{r}
+dataFromRandom.plusminus1<-(dataFromRandom-.5)*2
+```
+
+Recall from the lecture notes that monobit test of randomness is based on the statistic
+
+\[S=\frac{|\sum_{i=1}^{N}R_i|}{\sqrt{2N}} \sim erfc,\]
+
+where \(R_i\) is the i-th random number, summation is done over all \(N=nFlips\) random numbers.
+
+erfc is the complimentary error function, a special function complimentary to error function erf=1-erfc.
+
+Both functions can be easily calculated in R with the help of pnorm:
+
+```{r}
+erf <- function(x) 2 * pnorm(x * sqrt(2)) - 1
+erfc <- function(x) 2 * pnorm(x * sqrt(2), lower = FALSE)
+```
+
+The complimentary error function looks like:
+
+```{r}
+plot(seq(from=-3,to=3,by=.05),erfc(seq(from=-3,to=3,by=.05)),type="l",xlab="x",ylab="erfc(x")
+```
+
+To test the sequence \(R_i\) check the value erfc(S).
+
+If the P-value or erfc(S) is less or equal than 0.01 the sequence fails the test.
+
+```{r}
+erfc(abs(sum(dataFromRandom.plusminus1)/sqrt(2*nFlips)))
+```
+
+The test shows that the Random.org sequence passes.
+
+Now check each of the sub-sequences created earlier:
+
+```{r}
+plot(erfc(abs(apply(matrix(dataFromRandom.plusminus1,ncol=50),1,sum))/sqrt(2*50)),ylab="P-values of 20 runs")
+abline(h=.01)
+```
+
+How many runs out of 20 fail the test?
+
+```{r}
+sum(erfc(abs(apply(matrix(dataFromRandom.plusminus1,ncol=50),1,sum))/sqrt(2*50))<=.01)
+```
+
+# 3 Invent a random number generator
+
+Think about possible sources of true or pseudo-random sequences of {0,1} and choose one or two of them.
+Conduct the tests described in the previous section.
+
+Include in the report:
+
+1. Description of your random number generator
+2. Generated sequence
+3. Results of the uniformity test
+4. Results of the frequency test
+5. Results of the turning point test
+
+# 4 Monte Carlo Method
+
+## 4.1 Scratch off quote of the day: fuction download
+
+Download function `ScratchOffMonteCarlo()` contained in a binary file ScratchOffMonteCarlo.rda from the web site, put it in a folder with path
+
+```{r}
+datapath<-"Path to the folder with ScratchOffMonteCarlo.rda"
+```
+
+and import it into R.
+
+```{r}
+load(file=paste(datapath,'ScratchOffMonteCarlo.rda',sep='/'))
+```
+
+## 4.2 Simulate pseudo-random poins \([x,y]\) on \([0,100] \times [0,100]\)
+
+Select a number o points `nSample`.
+
+Simulate a sample of length `2*nSample` from uniform distribution on [0,100] and turn it into a \((nSample \times 2)\) matrix.
+Use a seed of your choice `my.seed`.
+
+```{r}
+set.seed(my.seed)
+xy<-runif(2*nSample,0,100)
+xy<-matrix(xy,ncol=2)
+```
+
+Throw nSample simulated points on square \([0,100] \times [0,100]\) to scratch off some of yellow paint.
+
+For example,
+
+```{r}
+nSample<-1000
+my.seed<-938364
+set.seed(my.seed)
+xy<-runif(2*nSample,0,100)
+xy<-matrix(xy,ncol=2)
+head(xy)
+```
+
+```{r}
+ScratchOffMonteCarlo(xy)
+```
+
+Take a note of the percentage scratched off returned by ScratchOffMonteCarlo(xy).
+
+**By changing nSample and my.seed try to make the quote of the day readable with minimum sample size.**
+**What percent you needed to scratch off to make the quote readable?**
+
+## 4.3 Simulate quasi-random poins \([x,y]\) on \([0,100] \times [0,100]\)
+
+function runif() can be replaced by sobol() from library randtoolbox.
+
+Run sobol() first time with the default set for parameter init=T.
+
