@@ -232,6 +232,69 @@ How many runs out of 20 fail the test?
 sum(erfc(abs(apply(matrix(dataFromRandom.plusminus1,ncol=50),1,sum))/sqrt(2*50))<=.01)
 ```
 
+# 3 Invent a random number generator
+
+For my source of "random" numbers I used Lake Michigan water temperature
+measures at Montrose harbor from 2013
+
+```{r}
+suppressWarnings(library(dplyr))
+
+df <- read.csv("~/Dropbox/MScA/31007 - Stats Analysis/Assignment 2/Beach_Water_Quality_-_Automated_Sensors.csv", stringsAsFactors = F)
+
+df$Measurement.Timestamp <- strptime(df$Measurement.Timestamp, "%m/%d/%Y %H:%M:%S %p")
+df <- df[df$Measurement.Timestamp > '2014-05-31', ]
+df <- df[df$Measurement.Timestamp < '2014-07-01', ]
+df <- df[df$Beach.Name == 'Montrose Beach', ]
+sequence <- df$Water.Temperature
+sequence <- sequence[!is.na(sequence)]
+```
+
+### Uniformity Test
+
+```{r}
+sequence.hist <- hist(sequence)
+```
+
+```{r}
+(sequence.hist.mean <- mean(sequence.hist$density))
+```
+
+```{r}
+(sequence.hist.sd <- sd(sequence.hist$density))
+````
+
+```{r}
+plot(sequence.hist,freq=FALSE,ylim=c(0,sequence.hist.mean+2*sequence.hist.sd))
+abline(h=sequence.hist.mean)
+abline(h=sequence.hist.mean+1.96*sequence.hist.sd,col="red",lty=2)
+abline(h=sequence.hist.mean-1.96*sequence.hist.sd,col="red",lty=2)
+```
+
+```{r}
+(sequence.hist.var  <- var(sequence.hist$density))
+```
+
+```{r}
+plot(df$Measurement.Timestamp, df$Water.Temperature)
+```
+
+### Turning Point Test
+```{r}
+suppressWarnings(library(randtests))
+turning.point.test(sequence)
+```
+
+### Monobit Test
+```{r}
+dataFromRandom.plusminus1 <- (sequence-.5)*2
+
+erf <- function(x) 2 * pnorm(x * sqrt(2)) - 1
+erfc <- function(x) 2 * pnorm(x * sqrt(2), lower = FALSE)
+
+erfc(abs(sum(dataFromRandom.plusminus1)/sqrt(2*length(sequence))))
+```
+
 # 4 Monte Carlo Method
 
 ## 4.1 Scratch off quote of the day: fuction download
