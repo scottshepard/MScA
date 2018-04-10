@@ -80,15 +80,10 @@ Sample.histogram
 
 **What does the histogram tell you about the distribution? Is it consistent with the goal of simulation?**
 
-In 1.4 we turned our random numbers into a uniform distribution of random numbers.
-We would expect a histogram of the sample to be flat across all buckets because a
-uniform distribuion is evenly distributed. The histogram here clearly shows an
-even and uniform distribution so we know that our transformation was successful.
-
 Estimate mean and standard deviation of Sample.histogram$density.
 
 ```{r, 2.1.1-3}
-(Sample.histogram.mean < -mean(Sample.histogram$density))
+(Sample.histogram.mean <- mean(Sample.histogram$density))
 ```
 
 ```{r, 2.1.1-4}
@@ -104,17 +99,6 @@ abline(h=Sample.histogram.mean-1.96*Sample.histogram.sd,col="red",lty=2)
 
 **What does the graph tell you about the observed distribution?**
 
-In any distribution we want the total area under the curve to be equal to one.
-With a uniform distribtion, bounded by {0, 1}, we want the density of each bucket
-to be equal to one because then the total value of probability curve is 1 * 1 = 1. 
-
-In this scenario the mean value of the density of each bucket should be one, 
-which is what we get here. The standard deviation is a measure of average 
-distance from the mean and in a uniform distribution is should be quite small. If 
-it is small that means that all the densities are about the same, hennce uniform. 
-Here the sd is 0.08 which I think is pretty small. I'm not totally sure how to 
-evaluate that but it looks right.
-
 Estimate moments of Sample.
 
 ```{r, 2.1.1-6}
@@ -127,15 +111,6 @@ Estimate moments of Sample.
 
 **What do you conclude about the estimated distribution from the moments?**
 
-In a uniform distribution the mean will be halfway between the interval bounds.
-Here we are bounded at {0, 1} so the mean should be 0.5. With a mean of 0.516 I'd 
-say that is about what you expect.
-
-The variance of a uniform distribution is 1/12 (b-a)^2 where the interval = {a, b}.
-
-Here that turns into 1/12 or about 0.083. The computed variance is 0.084 so that's 
-spot on.
-
 Check the summary of the simulated sample.
 
 ```{r, 2.1.1-8}
@@ -143,12 +118,6 @@ summary(Sample)
 ```
 
 **What do you think is the best way of estimating uniform distribution over unknown interval?**
-
-I think computing the mean and the variance using the min and max as your bounds would 
-give a pretty good estimation. If they line up nicely then you could compute the
-histogram and check that the densities in each bucket are about the same. If the 
-mean and variance are wildly off of what you would expect then there is no need 
-to go farther, you already know that the distribution is not uniform.
 
 ### 2.1.2 Repeat the same steps to test uniformity of the sample from Random.org
 
@@ -187,13 +156,6 @@ abline(h=Sample.histogram.mean-1.96*Sample.histogram.sd,col="red",lty=2)
 summary(dataFromRandom.dec)
 ```
 
-Here the mean and variance are in line with expectations for a uniform distribution.
-**However** the histogram paints a different picture. The standard deviation here
-is more than three times what the standard deviation of the densities was in 
-the previous uniform distribution. This data does not appear to be uniform. I would
-recommend doing the same uniform transformation we did before we wanted to get
-a uniform distribution.
-
 ## 2.2 Test independence of the sequence of zeros and ones
 
 ### 2.2.1 Turning point test
@@ -204,13 +166,19 @@ The number of turning points is the number of maxima and minima in the series.
 Let \(T\) be the number of turning points in a sample of length \(n\) large enough.
 Then the statistic of the test \[z=\frac{T-\frac{2n-4}{3}}{\sqrt{\frac{16n-29}{90}}}\] has standard normal distribution.
 
-The test is performed by `turning.point.test()` in package randtests
+The test is performed by turning.point.test() in package randtests
+
+```{r}
+library(randtests)
+```
 
 ```{r}
 turning.point.test(dataFromRandom.dec)
 ```
 
 The null hypothesis tested by turning point test is randomness (i.i.d.). The alternative is serial correlation in the sequence. Thus, if the test returns a very small p-value the randomness needs to be rejected.
+
+The p-value here is quite high so the randomness cannot be rejected.
 
 ### 2.2.2 Test frequency by Monobit test
 
@@ -238,8 +206,6 @@ erf <- function(x) 2 * pnorm(x * sqrt(2)) - 1
 erfc <- function(x) 2 * pnorm(x * sqrt(2), lower = FALSE)
 ```
 
-The complimentary error function looks like:
-
 ```{r}
 plot(seq(from=-3,to=3,by=.05),erfc(seq(from=-3,to=3,by=.05)),type="l",xlab="x",ylab="erfc(x")
 ```
@@ -260,7 +226,6 @@ Now check each of the sub-sequences created earlier:
 plot(erfc(abs(apply(matrix(dataFromRandom.plusminus1,ncol=50),1,sum))/sqrt(2*50)),ylab="P-values of 20 runs")
 abline(h=.01)
 ```
-
 How many runs out of 20 fail the test?
 
 ```{r}
@@ -269,53 +234,90 @@ sum(erfc(abs(apply(matrix(dataFromRandom.plusminus1,ncol=50),1,sum))/sqrt(2*50))
 
 # 3 Invent a random number generator
 
-Think about possible sources of true or pseudo-random sequences of {0,1} and choose one or two of them.
-Conduct the tests described in the previous section.
+For my source of "random" numbers I used Lake Michigan water temperature
+measures at Montrose harbor from 2013
 
-Include in the report:
+```{r}
+suppressWarnings(library(dplyr))
 
-1. Description of your random number generator
-2. Generated sequence
-3. Results of the uniformity test
-4. Results of the frequency test
-5. Results of the turning point test
+df <- read.csv("~/Dropbox/MScA/31007 - Stats Analysis/Assignment 2/Beach_Water_Quality_-_Automated_Sensors.csv", stringsAsFactors = F)
+
+df$Measurement.Timestamp <- strptime(df$Measurement.Timestamp, "%m/%d/%Y %H:%M:%S %p")
+df <- df[df$Measurement.Timestamp > '2014-05-31', ]
+df <- df[df$Measurement.Timestamp < '2014-07-01', ]
+df <- df[df$Beach.Name == 'Montrose Beach', ]
+sequence <- df$Water.Temperature
+sequence <- sequence[!is.na(sequence)]
+```
+
+### Uniformity Test
+
+```{r}
+sequence.hist <- hist(sequence)
+```
+
+```{r}
+(sequence.hist.mean <- mean(sequence.hist$density))
+```
+
+```{r}
+(sequence.hist.sd <- sd(sequence.hist$density))
+````
+
+```{r}
+plot(sequence.hist,freq=FALSE,ylim=c(0,sequence.hist.mean+2*sequence.hist.sd))
+abline(h=sequence.hist.mean)
+abline(h=sequence.hist.mean+1.96*sequence.hist.sd,col="red",lty=2)
+abline(h=sequence.hist.mean-1.96*sequence.hist.sd,col="red",lty=2)
+```
+
+```{r}
+(sequence.hist.var  <- var(sequence.hist$density))
+```
+
+```{r}
+plot(df$Measurement.Timestamp, df$Water.Temperature)
+```
+
+### Turning Point Test
+```{r}
+suppressWarnings(library(randtests))
+turning.point.test(sequence)
+```
+
+### Monobit Test
+```{r}
+dataFromRandom.plusminus1 <- (sequence-.5)*2
+
+erf <- function(x) 2 * pnorm(x * sqrt(2)) - 1
+erfc <- function(x) 2 * pnorm(x * sqrt(2), lower = FALSE)
+
+erfc(abs(sum(dataFromRandom.plusminus1)/sqrt(2*length(sequence))))
+```
 
 # 4 Monte Carlo Method
 
 ## 4.1 Scratch off quote of the day: fuction download
 
-Download function `ScratchOffMonteCarlo()` contained in a binary file ScratchOffMonteCarlo.rda from the web site, put it in a folder with path
+Download function `ScratchOffMonteCarlo()` contained in a binary file `ScratchOffMonteCarlo.rda` from the web site, put it in a folder with path
 
 ```{r}
-datapath<-"Path to the folder with ScratchOffMonteCarlo.rda"
-```
-
-and import it into R.
-
-```{r}
-load(file=paste(datapath,'ScratchOffMonteCarlo.rda',sep='/'))
+load("ScratchOffMonteCarlo.rda")
 ```
 
 ## 4.2 Simulate pseudo-random poins \([x,y]\) on \([0,100] \times [0,100]\)
 
-Select a number o points `nSample`.
 
-Simulate a sample of length `2*nSample` from uniform distribution on [0,100] and turn it into a \((nSample \times 2)\) matrix.
-Use a seed of your choice `my.seed`.
+Select a number o points nSample.
 
-```{r}
-set.seed(my.seed)
-xy<-runif(2*nSample,0,100)
-xy<-matrix(xy,ncol=2)
-```
+Simulate a sample of length 2*nSample from uniform distribution on [0,100] and turn it into a \((nSample \times 2)\) matrix.
+Use a seed of your choice my.seed
 
 Throw nSample simulated points on square \([0,100] \times [0,100]\) to scratch off some of yellow paint.
 
-For example,
-
 ```{r}
-nSample<-1000
-my.seed<-938364
+nSample <-21000
+my.seed <- 15101
 set.seed(my.seed)
 xy<-runif(2*nSample,0,100)
 xy<-matrix(xy,ncol=2)
@@ -331,9 +333,99 @@ Take a note of the percentage scratched off returned by ScratchOffMonteCarlo(xy)
 **By changing nSample and my.seed try to make the quote of the day readable with minimum sample size.**
 **What percent you needed to scratch off to make the quote readable?**
 
+I needed to scratch off about 93% of the yellow to make the quote readable.
+
+"The purpose of models is not to fir the data but to sharpen the questions
+within" - Samuel Karlin
+
+I started with the seed 151. I needed a sample of 28000 to read the quote.  
+I then tried to play around the the seed with a lower sample of only 20000 to 
+see if I could read the quote at any point. It didn't seem like changing the 
+seed changed the percentage of the chart that was shown. It always stayed 
+around 88% displayed.
+
 ## 4.3 Simulate quasi-random poins \([x,y]\) on \([0,100] \times [0,100]\)
 
 function runif() can be replaced by sobol() from library randtoolbox.
 
-Run sobol() first time with the default set for parameter init=T.
+```{r}
+suppressWarnings(library(randtoolbox))
+```
 
+```{r}
+my.seed<-151
+set.seed(my.seed)
+nSample<-10
+xy<-sobol(nSample,dim=2,init=T)*100
+```
+
+Then make init=F if you want to generate different sample every time or keep it equal to T if you want repeated samples.
+
+```{r}
+nSample<-17000
+xy<-sobol(nSample,dim=2,init=F,scrambling = T,seed=my.seed)*100
+
+plot(xy)
+```
+
+```{r}
+ScratchOffMonteCarlo(xy)
+```
+
+**Again, by changing nSample and my.seed try to make the quote of the day readable with minimum sample size.**
+
+At my.seed = 10 I needed an nSample of 20000 to get to 93% scratch off.  
+I changed my.seed to 151 and found I only needed a sample of 15000 to get the 
+93% scratch off. I found this was the lowest I could get.
+
+**What percent you needed to scratch off to make the quote readable?**
+
+I stil need the same 93% scratch off to view the quote as I did with the other
+Monte Carlo method.
+
+**Which of the Monte Carlo methods makes the quote readable sooner?**
+
+The quasi-random sobol method definitely makes the quote readable faster.
+
+**Which parameters nSample and my.seed gave you the best result, what percent of the yellow paing you were able to scratch off by each method?**
+
+I found the pairing my.seed = 151 & nSample = 17000 gave me the best results.
+
+**Changing which of the two parameters plays more significant role?**
+
+Changing nSample gave me, by far, the greatest impact. Changing my.seed has 
+some impact but now much and there was no clear pattern.
+
+# 5 Test
+
+Download your uniform(0,1) sample from left sidebar, unpack and read it.
+
+Create variable dataPath' equal to path to your local folder where you saved the data fileWeek2_Test_Sample.csv`.
+It should look like:
+
+```{r}
+dat <- read.csv('Week2_Test_Sample.csv', header=TRUE)$x
+```
+
+The sample dat has the following format:
+
+- dat[1] - mean value of normal distribution;
+- dat[2] - standard deviation of normal distribution;
+- dat[3] - intensity of exponential distribution;
+- dat[4]:dat[504] sample from uniform distribution on [0.1].
+
+Using this sample, create:
+
+- Sample datNorm from normal distribution with mean dat[1] and standard deviation dat[2];
+- Sample datExp from exponential distribution with intensity dat[3].
+
+```{r}
+datNorm <- qnorm(dat[4:503], dat[1], dat[2])
+datExp <- qexp(dat[4:503], dat[3])
+
+res<-cbind(datNorm=datNorm,datExp=datExp)
+```
+
+```{r}
+write.csv(res, 'result.csv', row.names = F)
+```
