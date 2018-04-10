@@ -1,7 +1,7 @@
 ---
 title: 'Week 2: Assignment'
 author: "Scott Shepard"
-date: "4/4/2018"
+date: "4/9/2018"
 output:
   pdf_document: default
   html_document: default
@@ -80,6 +80,8 @@ Sample.histogram
 
 **What does the histogram tell you about the distribution? Is it consistent with the goal of simulation?**
 
+In 1.4 we turned our random numbers into a uniform distribution of random numbers. We would expect a histogram of the sample to be flat across all buckets because a uniform distribuion is evenly distributed. The histogram here clearly shows an even and uniform distribution so we know that our transformation was successful.
+
 Estimate mean and standard deviation of Sample.histogram$density.
 
 ```{r, 2.1.1-3}
@@ -99,6 +101,10 @@ abline(h=Sample.histogram.mean-1.96*Sample.histogram.sd,col="red",lty=2)
 
 **What does the graph tell you about the observed distribution?**
 
+In any distribution we want the total area under the curve to be equal to one. With a uniform distribtion, bounded by {0, 1}, we want the density of each bucket to be equal to one because then the total value of probability curve is 1 * 1 = 1.
+
+In this scenario the mean value of the density of each bucket should be one, which is what we get here. The standard deviation is a measure of average distance from the mean and in a uniform distribution is should be quite small. If it is small that means that all the densities are about the same, hennce uniform. Here the sd is 0.08 which I think is pretty small. I'm not totally sure how to evaluate that but it looks right.
+
 Estimate moments of Sample.
 
 ```{r, 2.1.1-6}
@@ -111,6 +117,12 @@ Estimate moments of Sample.
 
 **What do you conclude about the estimated distribution from the moments?**
 
+In a uniform distribution the mean will be halfway between the interval bounds. Here we are bounded at {0, 1} so the mean should be 0.5. With a mean of 0.516 I'd say that is about what you expect.
+
+The variance of a uniform distribution is 1/12 (b-a)^2 where the interval = {a, b}.
+
+Here that turns into 1/12 or about 0.083. The computed variance is 0.084 so that's spot on.
+
 Check the summary of the simulated sample.
 
 ```{r, 2.1.1-8}
@@ -118,6 +130,8 @@ summary(Sample)
 ```
 
 **What do you think is the best way of estimating uniform distribution over unknown interval?**
+
+I think computing the mean and the variance using the min and max as your bounds would give a pretty good estimation. If they line up nicely then you could compute the histogram and check that the densities in each bucket are about the same. If the mean and variance are wildly off of what you would expect then there is no need to go farther, you already know that the distribution is not uniform.
 
 ### 2.1.2 Repeat the same steps to test uniformity of the sample from Random.org
 
@@ -155,6 +169,8 @@ abline(h=Sample.histogram.mean-1.96*Sample.histogram.sd,col="red",lty=2)
 ```{r, 2.1.2-8}
 summary(dataFromRandom.dec)
 ```
+
+Here the mean and variance are in line with expectations for a uniform distribution. However the histogram paints a different picture. The standard deviation here is more than three times what the standard deviation of the densities was in the previous uniform distribution. This data does not appear to be uniform. I would recommend doing the same uniform transformation we did before we wanted to get a uniform distribution.
 
 ## 2.2 Test independence of the sequence of zeros and ones
 
@@ -272,18 +288,28 @@ abline(h=sequence.hist.mean-1.96*sequence.hist.sd,col="red",lty=2)
 ```
 
 ```{r}
-(sequence.hist.var  <- var(sequence.hist$density))
+var(sequence)
 ```
 
 ```{r}
-plot(df$Measurement.Timestamp, df$Water.Temperature)
+summary(sequence)
 ```
+
+This absolutely fails the uniformity test. Histogram is unimodal skewed right.
+There is a lot of difference between the densities. The standard deviation is 
+huge! It's almost as large as the mean value itself. The bars are all over the 
+place. The variance should be 1/12(max-min) which here is about 0.58 but the
+actual variance is nearly three times at 1.47! Clearly this breaks the uniformity
+test.
 
 ### Turning Point Test
 ```{r}
 suppressWarnings(library(randtests))
 turning.point.test(sequence)
 ```
+
+The turning point test fails. The null hypothesis is rejected and the alternative
+accepted: non randomness.
 
 ### Monobit Test
 ```{r}
@@ -294,6 +320,22 @@ erfc <- function(x) 2 * pnorm(x * sqrt(2), lower = FALSE)
 
 erfc(abs(sum(dataFromRandom.plusminus1)/sqrt(2*length(sequence))))
 ```
+
+The monobit test fails. The p-value is less than 0.01
+
+
+Why did all my tests fail? Surely the temperature of water can't be predicted.
+Nature is random after all!
+
+Looking at a plot of the temperature over time will help.
+
+```{r}
+plot(df$Measurement.Timestamp, df$Water.Temperature)
+```
+
+There is a difference between _randomness_ and _error_. Water temp can't be 
+perfectly predicted but today's temperature depends heavily on yesterday's 
+temperature. We see a pretty obvious pattern of ups and downs in here.
 
 # 4 Monte Carlo Method
 
