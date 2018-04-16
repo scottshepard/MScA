@@ -199,9 +199,13 @@ plot(LinearModel4$X,LinearModel4$Y)
 Calculate the theoretical ρ2 for the “correct model” which is LinearModel1.
 
 ```{r}
+sd.X   <- sd(LinearModel1$X)
+sd.Y   <- sd(LinearModel1$Y)
+sd.Eps <- sd(LinearModel1$Eps)
+
 # Theoretical Rho^2
-# Theoretical.Rho.Squared<-(a*sd.X)^2/((a*sd.X)^2+sd.Eps^2)
-# Theoretical.Rho.Squared
+Theoretical.Rho.Squared<-(a*sd.X)^2/((a*sd.X)^2+sd.Eps^2)
+Theoretical.Rho.Squared
 ```
 
 ```{r}
@@ -212,6 +216,9 @@ c(cor(LinearModel1$X,LinearModel1$Y)^2,
 ```
 
 **How do you interpret the results?**
+
+The theortical Rho^2 is pretty darn close to the estimated Rho^2 for LinearModel1. I would say that useing the correlation 
+squared is a good esimation of the theoretical Rho^2.
 
 ## 6. Estimation of Linear Model
 
@@ -256,37 +263,123 @@ var(summary(m1)$residuals)*999/998
 Estimate the same parameters using the method of moments directly.
 
 ```{r}
+aEstimate <- cov(LinearModel1$X, LinearModel1$Y) / var(LinearModel1$X)
+bEstimate <- mean(LinearModel1$Y) - aEstimate*mean(LinearModel1$X)
 
+sigmaEstimate <- sqrt(var(LinearModel1$Y) - aEstimate^2 * var(LinearModel1$X))
 ```
 
 ```{r}
-
+c(aEstimate,bEstimate,sigmaEstimate)
 ```
 
 ```{r}
-
+c(sigmaMetodMoments=sigmaEstimate,sigmaLinearModel=summary(m1)$sigma)
 ```
 
 ```{r}
+m2<-lm(Y~X,data=LinearModel2)
+m3<-lm(Y~X,data=LinearModel3)
+m4<-lm(Y~X,data=LinearModel4)
 
+summary(m2)$coeff
 ```
 
 ```{r}
-
+summary(m2)$sigma
 ```
 
 ```{r}
-
+summary(m2)$r.squared
 ```
 
 ```{r}
-
+summary(m2)$df
 ```
 
 ```{r}
-
+summary(m3)$coeff
 ```
 
 ```{r}
-
+summary(m3)$sigma
 ```
+
+```{r}
+summary(m3)$r.squared
+```
+
+```{r}
+summary(m3)$df
+```
+
+```{r}
+summary(m4)$coeff
+```
+
+```{r}
+summary(m4)$sigma
+```
+
+```{r}
+summary(m4)$r.squared
+```
+
+```{r}
+summary(m4)$df
+```
+
+# Test 3
+
+Download your sample, fit linear model to it, decide which distribution was used to simulate the residuals: normal, uniform, exponential, Cauchy.
+
+Find:  
+  - Slope (10%)  
+  - Intercept (10%)  
+  - Mean value of residuals (10%)  
+  - Standard deviation of residuals (30%)    
+  - Distribution of residuals (40%)  
+
+```{r}
+dataPath <- "~/Dropbox/MScA/31007 - Stats Analysis/Assignment 3"
+df <- read.table(file.path(dataPath, 'Week3_Test_Sample.csv'), header=TRUE)
+```
+
+Compute the model and plot the data
+
+```{r}
+model <- lm(Y ~ X, data=df)
+plot(X, Y, data=df)
+```
+
+Determine slope, intercept, and standard deviation of the residuals. These metrics can all be found
+from the model object directly by calling `summary`
+
+```{r}
+summary(model)
+```
+
+| Slope | 3.6359 |
+| Intercept | 4.1062 |
+| SD Residuals | 2.568 |
+
+Determin mean value of residuals
+
+```{r}
+mean(model$residuals)
+```
+
+Mean of residuals: -5.986531e-17
+
+The mean of the residuals being so close to zero suggests either a uniform distribution centered on zero or a normal 
+distribution.
+  
+Determine the distribution of the residuals.
+
+The easiest method is just to plot the residuals.
+  
+```{r}
+hist(model$residuals)
+```
+
+This looks quite normal. It's unimodal, centered at zero, sloping in the tails. Its defintely not uniform, exponential, or Cauchy.
