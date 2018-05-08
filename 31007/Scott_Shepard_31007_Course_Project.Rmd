@@ -1,0 +1,390 @@
+---
+title: "Course Assignment"
+subtitle: "31007: Statistical Analysis"
+author: "Scott Shepard"
+date: "5/8/2018"
+output: pdf_document
+---
+
+Completion:  
+  - [x] Step 1  
+  - [ ] Step 2  
+  - [ ] Step 3  
+  - [ ] Step 4  
+  - [ ] Step 5  
+  - [ ] Step 6  
+  - [ ] Step 7  
+
+```{r include=FALSE}
+suppressWarnings(library(dplyr))
+library(ggplot2)
+```
+
+## Step 1.
+
+Read the data and visualize and get familiar with the variables.
+
+```{r}
+datapath <- "~/Dropbox/MScA/31007 - Stats Analysis/Course Project"
+
+AssignmentData <- read.csv(
+  file=file.path(datapath, "RegressionAssignmentData2014.csv"),
+  row.names=1,
+  header=TRUE,
+  sep=",")
+
+head(AssignmentData)
+```
+
+The first 7 variables (input variables) are the daily records of the US Treasury yields to maturity. The meaning of the variable Output will become clear later.
+
+Plot the input variables.
+
+```{r}
+matplot(AssignmentData[,-c(8,9,10)],type='l')
+```
+
+Plot the input variables together with the output variable.
+
+```{r}
+matplot(AssignmentData[,-c(9,10)],type='l')
+```
+
+## Step 2
+
+Estimate simple regression model with each of the input variables and the output variable given in AssignmentData.
+
+### Three Month Bill
+
+```{r}
+m3M <- lm(Output1 ~ USGG3M, data=AssignmentData)
+```
+
+Check available names of fields returned by lm() and summary() functions
+
+```{r names}
+(names(m3M))
+(names(summary(m3M)))
+```
+
+Analyze the summary
+
+```{r summary_3_mo_model}
+summary(m3M)
+```
+
+This variable, `USGG3M`, which trackes the rates of three month treasury bonds, 
+is quite a good predictor of `Output1`. The p-value indicates a statistically 
+significant slope. The adjusted R-squared is at 96% which is really high.
+
+The key value of 2.5 for the estimated slope indicates that when all 
+
+```{r}
+c(Total.Variance=var(AssignmentData[,8]),Unexplained.Variance=summary(m3M)$sigma^2)
+```
+
+There remains only a small portion of the total variance that is unexplained.
+The ratio of these two numbers gives the unadjusted R^2 in summary.
+
+```{r}
+matplot(AssignmentData[,8],type="l",xaxt="n")
+lines(m3M$fitted.values,col="red")
+```
+
+### Six Month Bill
+
+```{r}
+m6M <- lm(Output1 ~ USGG6M, data=AssignmentData)
+
+summary(m6M)
+```
+
+The six-month yield input does an even better job of predicting `Output1` than
+the three-month yield did, explaining 97.4% of the variance.
+
+```{r}
+c(Total.Variance=var(AssignmentData[,8]),Unexplained.Variance=summary(m6M)$sigma^2)
+```
+
+There is less unexplained variance with this input variable, which matches
+the R^2 number in summary. The intercept is slightly different but the 
+slope is about the same.
+
+```{r}
+matplot(AssignmentData[,8],type="l",xaxt="n")
+lines(m6M$fitted.values,col="red")
+```
+
+### Two Year Note
+
+```{r}
+m2Y <- lm(Output1 ~ USGG2YR, data=AssignmentData)
+
+summary(m2Y)
+```
+
+```{r}
+c(Total.Variance=var(AssignmentData[,8]),Unexplained.Variance=summary(m2Y)$sigma^2)
+```
+
+```{r}
+matplot(AssignmentData[,8],type="l",xaxt="n")
+lines(m2Y$fitted.values,col="red")
+```
+
+### Three Year Note
+
+```{r}
+m3Y <- lm(Output1 ~ USGG3YR, data=AssignmentData)
+
+summary(m3Y)
+```
+
+```{r}
+c(Total.Variance=var(AssignmentData[,8]),Unexplained.Variance=summary(m3Y)$sigma^2)
+```
+
+```{r}
+matplot(AssignmentData[,8],type="l",xaxt="n")
+lines(m3Y$fitted.values,col="red")
+```
+
+### Five Year Note
+
+```{r}
+m5Y <- lm(Output1 ~ USGG5YR, data=AssignmentData)
+
+summary(m5Y)
+```
+
+```{r}
+c(Total.Variance=var(AssignmentData[,8]),Unexplained.Variance=summary(m5Y)$sigma^2)
+```
+
+```{r}
+matplot(AssignmentData[,8],type="l",xaxt="n")
+lines(m5Y$fitted.values,col="red")
+```
+
+### Ten Year Note
+ 
+```{r}
+m10 <- lm(Output1 ~ USGG10YR, data=AssignmentData)
+
+summary(m10)
+```
+
+```{r}
+c(Total.Variance=var(AssignmentData[,8]),Unexplained.Variance=summary(m10)$sigma^2)
+```
+
+```{r}
+matplot(AssignmentData[,8],type="l",xaxt="n")
+lines(m10$fitted.values,col="red")
+```
+
+### Thirty Year Note
+
+```{r}
+m30 <- lm(Output1 ~ USGG30YR, data=AssignmentData)
+
+summary(m30)
+```
+
+```{r}
+c(Total.Variance=var(AssignmentData[,8]),Unexplained.Variance=summary(m30)$sigma^2)
+```
+
+```{r}
+matplot(AssignmentData[,8],type="l",xaxt="n")
+lines(m30$fitted.values,col="red")
+```
+
+### All Together Now
+
+Collect all slopes and intercepts in one table and print this table. Try to do it in one line using apply() function.
+
+```{r}
+models <- list(m3M, m6M, m2Y, m3Y, m5Y, m10, m30)
+models_table <- plyr::ldply(models, function(m) {
+  coefficients <- coef(m)
+  var_name <- names(coefficients)[2]
+  data.frame(Input=var_name,Intercept=coefficients[1], Slope=coefficients[1])
+})
+row.names(models_table) <- models_table$Input
+models_table <- models_table[,-1]
+models_table
+```
+
+# Step 3
+
+Fit linear regression models using single output (column 8 Output1) as input and each of the original inputs as outputs.
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
