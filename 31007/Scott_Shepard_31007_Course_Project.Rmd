@@ -204,72 +204,112 @@ lines(m30$fitted.values,col="red")
 
 Collect all slopes and intercepts in one table and print this table. Try to do it in one line using apply() function.
 
+
+
 ```{r}
-models <- list(m3M, m6M, m2Y, m3Y, m5Y, m10, m30)
-models_table <- plyr::ldply(models, function(m) {
-  coefficients <- coef(m)
-  var_name <- names(coefficients)[2]
-  data.frame(Input=var_name,Intercept=coefficients[1], Slope=coefficients[1])
-})
-row.names(models_table) <- models_table$Input
-models_table <- models_table[,-1]
-models_table
+Output1 <- AssignmentData$Output1
+t(apply(AssignmentData[,-c(8:10)], 2, function(x) lm(Output1~x)$coef))
 ```
 
 # Step 3
 
 Fit linear regression models using single output (column 8 Output1) as input and each of the original inputs as outputs.
 
+Collect all slopes and intercepts in one table and print this table.
 ```{r}
+t(apply(AssignmentData[,-c(8:10)], 2, function(y) lm(y~Output1)$coef))
+```
 
+# Step 4
+
+Estimate logistic regression using all inputs and the data on FED tightening and easing cycles.
+
+```{r}
+AssignmentDataLogistic <- data.frame(data.matrix(AssignmentData, rownames.force="automatic"))
+```
+
+Prepare the easing-tightening data.
+Make the easing column equal to 0 during the easing periods and NA otherwise.
+Make the tightening column equal to 1 during the tightening periods and NA otherwise.
+
+```{r}
+# Create columns of easing periods (as 0s) and tightening periods (as 1s)
+EasingPeriods<-AssignmentDataLogistic[,9]
+EasingPeriods[AssignmentDataLogistic[,9]==1]<-0
+TighteningPeriods<-AssignmentDataLogistic[,10]
+# Check easing and tightening periods
+cbind(EasingPeriods,TighteningPeriods)[c(550:560,900:910,970:980),]
+```
+
+Remove the periods of neither easing nor tightening.
+
+```{r}
+All.NAs<-is.na(EasingPeriods)&is.na(TighteningPeriods)
+AssignmentDataLogistic.EasingTighteningOnly<-AssignmentDataLogistic
+AssignmentDataLogistic.EasingTighteningOnly[,9]<-EasingPeriods
+AssignmentDataLogistic.EasingTighteningOnly<-AssignmentDataLogistic.EasingTighteningOnly[!All.NAs,]
+AssignmentDataLogistic.EasingTighteningOnly[is.na(AssignmentDataLogistic.EasingTighteningOnly[,10]),10]<-0
+# Binary output for logistic regression is now in column 10
+```
+
+Plot the data and the binary output variable representing easing (0) and tightening (1) periods.
+
+```{r}
+matplot(AssignmentDataLogistic.EasingTighteningOnly[,-c(9,10)],type="l",ylab="Data and Binary Fed Mode")
+lines(AssignmentDataLogistic.EasingTighteningOnly[,10]*20,col="red")
+```
+
+Estimate logistic regression with 3M yields as predictors for easing/tightening output.
+
+```{r}
+LogisticModel.TighteningEasing_3M<-glm(AssignmentDataLogistic.EasingTighteningOnly[,10]~
+                        AssignmentDataLogistic.EasingTighteningOnly[,1],family=binomial(link=logit))
+summary(LogisticModel.TighteningEasing_3M)
 ```
 
 ```{r}
-
+matplot(AssignmentDataLogistic.EasingTighteningOnly[,-c(9,10)],type="l",ylab="Data and Fitted Values")
+lines(AssignmentDataLogistic.EasingTighteningOnly[,10]*20,col="red")
+lines(LogisticModel.TighteningEasing_3M$fitted.values*20,col="green")
 ```
 
 ```{r}
-
+LogisticModel.TighteningEasing_All <-
+  glm(Tightening ~ .,
+      data=AssignmentDataLogistic.EasingTighteningOnly[,c(1:7,10)],
+      family=binomial(link=logit))
 ```
 
 ```{r}
-
+summary(LogisticModel.TighteningEasing_All)$aic
 ```
 
 ```{r}
-
+summary(LogisticModel.TighteningEasing_All)$coefficients[,c(1,4)]
 ```
 
 ```{r}
+matplot(AssignmentDataLogistic.EasingTighteningOnly[,-c(9,10)],type="l",ylab="Results of Logistic Regression")
+lines(AssignmentDataLogistic.EasingTighteningOnly[,10]*20,col="red")
+lines(LogisticModel.TighteningEasing_All$fitted.values*20,col="green")
+```
 
+**Interpret the coefficients of the model and the fitted values.**
+
+### TODO
+
+Calculate and plot log-odds and probabilities. Compare probabilities with fitted values.
+
+```{r}
+# Calculate odds
+Log.Odds<-predict(LogisticModel.TighteningEasing_All)
+plot(Log.Odds,type="l")
 ```
 
 ```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
+Probabilities<-1/(exp(-Log.Odds)+1)
+plot(LogisticModel.TighteningEasing_All$fitted.values,type="l",ylab="Fitted Values & Log-Odds")
+lines(Probabilities,col="red")
 ```
 
 ```{r}
