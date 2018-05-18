@@ -8,9 +8,9 @@ output: pdf_document
 
 Completion:  
   - [x] Step 1  
-  - [ ] Step 2  
-  - [ ] Step 3  
-  - [ ] Step 4  
+  - [x] Step 2  
+  - [x] Step 3  
+  - [x] Step 4  
   - [ ] Step 5  
   - [ ] Step 6  
   - [ ] Step 7  
@@ -204,8 +204,6 @@ lines(m30$fitted.values,col="red")
 
 Collect all slopes and intercepts in one table and print this table. Try to do it in one line using apply() function.
 
-
-
 ```{r}
 Output1 <- AssignmentData$Output1
 t(apply(AssignmentData[,-c(8:10)], 2, function(x) lm(Output1~x)$coef))
@@ -296,7 +294,27 @@ lines(LogisticModel.TighteningEasing_All$fitted.values*20,col="green")
 
 **Interpret the coefficients of the model and the fitted values.**
 
-### TODO
+The logistic model on predicting tightening tries to use all of the treasury 
+note date to predict whether the fed will be easiing or tightening interest 
+rates. An easing period is when the FED is lowering interest rates while 
+a tightening period is when the FED is raising interest rates.
+
+In this model we are looking at all the data across all periods. The bright 
+green line is the predicted easing/tightening probabiliyt. It's all over the 
+map. While the model correctly gets the first and third tightening cycles,
+it erroneously predicts two tightening cycles in the beginning where there
+is none, and in the second real tightening cycle the predicted values 
+drop off very quickly while the tightening actually continued for a brief 
+period. This is not a very good model.
+
+Looking at the coefficients we see why. They are warring with each other. and
+the model is too sensitive to minor swings. The y-intercept says we start
+in an easing cycle, which is true. Then all of the variables should be 
+correlated in the same direction but they are not. The negative 3M coeffienct
+means that as the 3M treasury note's interest rate rises, the model predicts
+easing, not tightening. The same is true on the 3Y, 5Y, and 10Y notes. Meanwhile
+the 6M, 2Y and 30Y inputs predict tightening as their yields rise. This doesn't
+make a lot of sense and I think is evidence that the model is overfitted.
 
 Calculate and plot log-odds and probabilities. Compare probabilities with fitted values.
 
@@ -312,117 +330,634 @@ plot(LogisticModel.TighteningEasing_All$fitted.values,type="l",ylab="Fitted Valu
 lines(Probabilities,col="red")
 ```
 
+# Step 5.
+
+Compare linear regression models with different combinations of predictors.
+Select the best combination.
+
+Below we show only two of possible combinations: full model containing all 7 predictors and Null model containing only intercept, but none of the 7 predictors.
+Estimate other possible combinations.
+
 ```{r}
+AssignmentDataRegressionComparison<-data.matrix(AssignmentData[,-c(9,10)],rownames.force="automatic")
+AssignmentDataRegressionComparison<-AssignmentData[,-c(9,10)]
+```
+
+Estimate the full model by using all 7 predictors.
+
+```{r}
+fullModel <- lm(Output1~., data=AssignmentDataRegressionComparison)
+fullModel.summary <- summary(fullModel)
+```
+
+Look at coefficients, R2, adjusted R2, degrees of freedom.
+
+1. Coefficients:
+
+```{r}
+fullModel.summary$coef
+```
+
+2. R2, adjusted R2:
+
+```{r}
+fullModel.summary[c('r.squared','adj.r.squared')]
+```
+
+3. Degrees of freedom:
+
+```{r}
+fullModel.summary$df
+```
+
+## TODO
+
+**Intepret the fitted model. How good is the fit? How significant are the parameters?**
+
+Estimate the Null model by including only intercept.
+
+```{r}
+nullModel <- lm(Output1 ~ 1, data=AssignmentDataRegressionComparison)
+nullModel.summary <- summary(nullModel)
+(nullModel.summary$coefficients)
+(nullModel.summary[c('r.squared','adj.r.squared')])
+(nullModel.summary$df)
+```
+
+**Why does summary(nullModel) not show R^2?**
+
+R^2 is not shown because there is no explained varianced in this model. R^2
+is the ratio of explained to total variance. Total variance is the distance
+of each predicted value from the mean. With no predictors there is no explained
+variance and so the percentage is 0/total sum of squares.
+
+Compare models pairwise using anova()
+
+```{r}
+anova(fullModel, nullModel)
+```
+
+**Interpret the results of anova().**
+
+## TODO
+
+**Repeat the analysis for different combinations of input variables and select the one you think is the best.**
+
+## TODO
+
+**Explain your selection.**
+
+## TODO
+
+# Step 6.
+
+Perform rolling window analysis of the yields data.
+Use package zoo for rolling window analysis.
+
+Set the window width and window shift parameters for rolling window.
+
+```{r}
+Window.width<-20; Window.shift<-5
+```
+
+Run rolling mean values usingrollapply().
+
+```{r}
+library(zoo)
+```
+
+Calculate rolling mean values for each variable.
+
+```{r}
+# Means
+all.means<-rollapply(AssignmentDataRegressionComparison,width=Window.width,by=Window.shift,by.column=TRUE, mean)
+head(all.means,10)
+```
+
+```{r}
+# Create points at which rolling means are calculated
+Count<-1:length(AssignmentDataRegressionComparison[,1])
+Rolling.window.matrix<-rollapply(Count,width=Window.width,by=Window.shift,by.column=FALSE,
+          FUN=function(z) z)
+Rolling.window.matrix[1:10,]
+```
+
+```{r}
+# Take middle of each window
+Points.of.calculation<-Rolling.window.matrix[,10]
+Points.of.calculation[1:10]
+```
+
+```{r}
+length(Points.of.calculation)
+```
+
+```{r}
+# Insert means into the total length vector to plot the rolling mean with the original data
+Means.forPlot<-rep(NA,length(AssignmentDataRegressionComparison[,1]))
+Means.forPlot[Points.of.calculation]<-all.means[,1]
+Means.forPlot[1:50]
+```
+
+```{r}
+# Assemble the matrix to plot the rolling means
+cbind(AssignmentDataRegressionComparison[,1],Means.forPlot)[1:50,]
+```
+
+```{r}
+plot(Means.forPlot,col="red")
+lines(AssignmentDataRegressionComparison[,1])
+```
+
+Run rolling daily difference standard deviation of each variable
+
+```{r}
+df <- AssignmentDataRegressionComparison
+DailyDifferencesList <- list()
+for (i in 2:(nrow(df))) {
+  DailyDifferencesList[[i-1]] <- data.frame(df[i+1,] - df[i,])
+}
+DailyDifferences <- plyr::ldply(DailyDifferencesList, data.frame)
+```
+
+```{r}
+rolling.sd<-rollapply(DailyDifferences,width=Window.width,by=Window.shift,by.column=TRUE, sd)
+head(rolling.sd)
+```
+
+```{r}
+rolling.dates<-rollapply(AssignmentDataRegressionComparison[-1,],width=Window.width,by=Window.shift,
+                         by.column=FALSE,FUN=function(z) rownames(z))
+head(rolling.dates)
+```
+
+```{r}
+rownames(rolling.sd)<-rolling.dates[,10]
+head(rolling.sd)
 
 ```
 
 ```{r}
-
+matplot(rolling.sd[,c(1,5,7,8)],xaxt="n",type="l",col=c("black","red","blue","green"))
+axis(side=1,at=1:1656,rownames(rolling.sd))
 ```
+
+Show periods of high volatility. 
+
+**How is volatility related to the level of rates?**
+
+## TODO
+
+```{r}
+# Show periods of high volatility
+high.volatility.periods<-rownames(rolling.sd)[rolling.sd[,8]>.5]
+high.volatility.periods
+```
+
+Fit linear model to rolling window data using 3 months, 5 years and 30 years variables as predictors.
+
+```{r}
+# Rolling lm coefficients
+Coefficients<-rollapply(AssignmentDataRegressionComparison,width=Window.width,by=Window.shift,by.column=FALSE,
+         FUN=function(z) coef(lm(Output1~USGG3M+USGG5YR+USGG30YR,data=as.data.frame(z))))
+rolling.dates<-rollapply(AssignmentDataRegressionComparison[,1:8],width=Window.width,by=Window.shift,by.column=FALSE,
+                         FUN=function(z) rownames(z))
+
+rownames(Coefficients)<-rolling.dates[,10]
+Coefficients[1:10,]
+```
+
+Look at pairwise X-Y plots of regression coefficients for the 3M, 5Yr and 30Yr yields as inputs.
+
+```{r}
+# Pairs plot of Coefficients
+pairs(Coefficients)
+```
+
+**Interpret the pairs plot.**
+
+## TODO
+
+Plot the coefficients. Show periods.
+
+```{r}
+# Plot of coefficients
+matplot(Coefficients[,-1],xaxt="n",type="l",col=c("black","red","green"))
+axis(side=1,at=1:1657,rownames(Coefficients))
+```
+
+```{r}
+high.slopespread.periods<-rownames(Coefficients)[Coefficients[,3]-Coefficients[,4]>3]
+jump.slopes<-rownames(Coefficients)[Coefficients[,3]>3]
+high.slopespread.periods
+```
+
+```{r}
+jump.slopes
+```
+
+**Is the picture of coefficients consistent with the picture of pairs? If yes, explain why.**
+
+How often the R-squared is not considered high?
+
+```{r}
+# R-squared
+r.squared<-rollapply(AssignmentDataRegressionComparison,width=Window.width,by=Window.shift,by.column=FALSE,
+FUN=function(z) summary(lm(Output1~USGG3M+USGG5YR+USGG30YR,data=as.data.frame(z)))$r.squared)
+r.squared[1:10,]
+```
+
+```{r}
+plot(r.squared[,2],xaxt="n",ylim=c(0,1))
+axis(side=1,at=1:1657,rownames(Coefficients))
+```
+
+```{r}
+(low.r.squared.periods<-r.squared[r.squared[,2]<.9,1])
+```
+
+**What could cause decrease of R2?**
+
+## TODO
+
+Analyze the rolling p-values.
+
+```{r}
+# P-values
+Pvalues<-rollapply(AssignmentDataRegressionComparison,width=Window.width,by=Window.shift,by.column=FALSE,
+                        FUN=function(z) summary(lm(Output1~USGG3M+USGG5YR+USGG30YR,data=as.data.frame(z)))$coefficients[,4])
+rownames(Pvalues)<-rolling.dates[,10]
+Pvalues[1:10,]
+```
+
+
+```{r}
+matplot(Pvalues,xaxt="n",col=c("black","blue","red","green"),type="o")
+axis(side=1,at=1:1657,rownames(Coefficients))
+```
+
+
+```{r}
+rownames(Pvalues)[Pvalues[,2]>.5]
+```
+
+
+```{r}
+rownames(Pvalues)[Pvalues[,3]>.5]
+```
+
+
+```{r}
+rownames(Pvalues)[Pvalues[,4]>.5]
+```
+
+**Interpret the plot.**
+
+## TODO
+
+# Step 7.
+
+Perform PCA with the inputs (columns 1-7).
+
+```{r}
+AssignmentData.Output<-AssignmentData$Output1
+AssignmentData<-data.matrix(AssignmentData[,1:7],rownames.force="automatic")
+dim(AssignmentData)
+```
+
+```{r}
+head(AssignmentData)
+```
+
+Explore the dimensionality of the set of 3M, 2Y and 5Y yields.
+
+```{r}
+# Select 3 variables. Explore dimensionality and correlation 
+AssignmentData.3M_2Y_5Y<-AssignmentData[,c(1,3,5)]
+pairs(AssignmentData.3M_2Y_5Y)
+```
+
+Observe the 3D plot of the set. Use library rgl:
+
+```{r}
+library("rgl")
+rgl.points(AssignmentData.3M_2Y_5Y)
+```
+
+Analyze the covariance matrix of the data. Compare results of manual calculation and `cov()`
+
+```{r}
+temp <- apply(AssignmentData, 2, function(col) col-mean(col))
+Manual.Covariance.Matrix <- 
+  apply(temp, 2, function(col) {
+    apply(temp, 2, function(col2) {
+      sum(col * col2)/(nrow(AssignmentData)-1)
+    })
+  })
+Manual.Covariance.Matrix
+```
+
+
+```{r}
+Covariance.Matrix <- cov(AssignmentData) 
+Covariance.Matrix
+```
+
+Plot the covariance matrix.
+
+```{r}
+Maturities<-c(.25,.5,2,3,5,10,30)
+contour(Maturities,Maturities,Covariance.Matrix)
+```
+
+Perform the PCA by manually calculating factors, loadings and analyzing the importance of factors.
+
+Find eigenvalues and eigenvectors. Calculate vector of means (zero loading), first 3 loadings and 3 factors.
 
 ```{r}
 
 ```
 
-```{r}
-
-```
 
 ```{r}
 
 ```
 
-```{r}
-
-```
 
 ```{r}
 
 ```
 
-```{r}
-
-```
 
 ```{r}
 
 ```
 
-```{r}
-
-```
 
 ```{r}
 
 ```
 
-```{r}
-
-```
 
 ```{r}
 
 ```
 
-```{r}
-
-```
 
 ```{r}
 
 ```
 
-```{r}
-
-```
 
 ```{r}
 
 ```
 
-```{r}
-
-```
 
 ```{r}
 
 ```
 
-```{r}
-
-```
 
 ```{r}
 
 ```
 
-```{r}
-
-```
 
 ```{r}
 
 ```
 
-```{r}
-
-```
 
 ```{r}
 
 ```
 
-```{r}
-
-```
 
 ```{r}
 
 ```
 
+
 ```{r}
 
 ```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
 
 ```{r}
 
