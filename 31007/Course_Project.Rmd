@@ -647,10 +647,11 @@ rgl.points(AssignmentData.3M_2Y_5Y)
 Analyze the covariance matrix of the data. Compare results of manual calculation and `cov()`
 
 ```{r}
-temp <- apply(AssignmentData, 2, function(col) col-mean(col))
+# Covariance of X & Y is sum((X-Xbar)*(Y-Ybar))/(n-1)
+Centered <- apply(AssignmentData, 2, function(col) col-mean(col))
 Manual.Covariance.Matrix <- 
-  apply(temp, 2, function(col) {
-    apply(temp, 2, function(col2) {
+  apply(Centered, 2, function(col) {
+    apply(Centered, 2, function(col2) {
       sum(col * col2)/(nrow(AssignmentData)-1)
     })
   })
@@ -675,291 +676,190 @@ Perform the PCA by manually calculating factors, loadings and analyzing the impo
 Find eigenvalues and eigenvectors. Calculate vector of means (zero loading), first 3 loadings and 3 factors.
 
 ```{r}
+Eigen.Decomposition = eigen(Covariance.Matrix)
+Eigen.Vectors = Eigen.Decomposition$vectors
+Eigen.Values  = Eigen.Decomposition$values
 
+Loadings = Eigen.Vectors
+Factors = Centered %*% Eigen.Vectors
+L0 = apply(AssignmentData, 2, function(col) mean(col))
+
+Loadings = Loadings[,1:3]
+Factors = Factors[,1:3]
 ```
 
 
 ```{r}
-
+PCA = princomp(AssignmentData)
 ```
 
 
 ```{r}
-
+barplot(Eigen.Values/sum(Eigen.Values),width=2,col = "black", names.arg=c("F1","F2","F3","F4","F5","F6","F7"))
 ```
 
 
 ```{r}
+matplot(Maturities,Loadings,type="l",lty=1,col=c("black","red","green"),lwd=3)
+```
 
+**Interpret the factors by looking at the shapes of the loadings.**
+
+## TODO
+
+Calculate and plot 3 selected factors
+
+```{r}
+matplot(Factors,type="l",col=c("black","red","green"),lty=1,lwd=3)
+```
+
+Change the signs of the first factor and the corresponding factor loading.
+
+```{r}
+Loadings[,1] <- -Loadings[,1]
+Factors[,1] <- -Factors[,1]
+matplot(Factors,type="l",col=c("black","red","green"),lty=1,lwd=3)
 ```
 
 
 ```{r}
-
+matplot(Maturities,Loadings3,type="l",lty=1,col=c("black","red","green"),lwd=3)
 ```
 
 
 ```{r}
+plot(Factors[,1],Factors[,2],type="l",lwd=2)
+```
 
+**Draw at least three conclusions from the plot of the first two factors above.**
+
+## TODO
+
+Analyze the adjustments that each factor makes to the term curve.
+
+```{r}
+OldCurve<-AssignmentData[135,]
+NewCurve<-AssignmentData[136,]
+CurveChange<-NewCurve-OldCurve
+FactorsChange<-Factors[136,]-Factors[135,]
+ModelCurveAdjustment.1Factor<-OldCurve+t(Loadings[,1])*FactorsChange[1]
+ModelCurveAdjustment.2Factors<-OldCurve+t(Loadings[,1])*FactorsChange[1]+t(Loadings[,2])*FactorsChange[2]
+ModelCurveAdjustment.3Factors<-OldCurve+t(Loadings[,1])*FactorsChange[1]+t(Loadings[,2])*FactorsChange[2]+
+  t(Loadings[,3])*FactorsChange[3]
+matplot(Maturities,
+        t(rbind(OldCurve,NewCurve,ModelCurveAdjustment.1Factor,ModelCurveAdjustment.2Factors,
+                ModelCurveAdjustment.3Factors)),
+        type="l",lty=c(1,1,2,2,2),col=c("black","red","green","blue","magenta"),lwd=3,ylab="Curve Adjustment")
+legend(x="topright",c("Old Curve","New Curve","1-Factor Adj.","2-Factor Adj.",
+                      "3-Factor Adj."),lty=c(1,1,2,2,2),lwd=3,col=c("black","red","green","blue","magenta"))
 ```
 
 
 ```{r}
+rbind(CurveChange,ModelCurveAdjustment.3Factors-OldCurve)
+```
 
+**Explain how shapes of the loadings affect the adjustnents using only factor 1, factors 1 and 2, and all 3 factors.**
+
+## TODO
+
+See the goodness of fit for the example of 10Y yield.
+
+```{r}
+cbind(Maturities,Loadings)
 ```
 
 
 ```{r}
-
+Model.10Y<-L0[6]+Loadings[6,1]*Factors[,1]+Loadings[6,2]*Factors[,2]+Loadings[6,3]*Factors[,3]
+matplot(cbind(AssignmentData[,6],Model.10Y),type="l",lty=1,lwd=c(3,1),col=c("black","red"),ylab="5Y Yield")
 ```
 
 
 ```{r}
+PCA.Yields<-princomp(AssignmentData)
+names(PCA.Yields)
+```
 
+Compare the loadings.
+
+```{r}
+# Check that the loadings are the same
+cbind(PCA.Yields$loadings[,1:3],Maturities,Loadings)
 ```
 
 
 ```{r}
-
+matplot(Maturities,PCA.Yields$loadings[,1:3],type="l",col=c("black","red","green"),lty=1,lwd=3)
 ```
 
 
 ```{r}
+matplot(PCA.Yields$scores[,1:3],type="l",col=c("black","red","green"),lwd=3,lty=1)
+```
 
+Change the signs of the first factor and factor loading again.
+
+```{r}
+# Change the signs of the 1st factor and the first loading
+PCA.Yields$loadings[,1]<--PCA.Yields$loadings[,1]
+PCA.Yields$scores[,1]<--PCA.Yields$scores[,1]
+matplot(Maturities,PCA.Yields$loadings[,1:3],type="l",col=c("black","red","green"),lty=1,lwd=3)
 ```
 
 
 ```{r}
+matplot(PCA.Yields$scores[,1:3],type="l",col=c("black","red","green"),lwd=3,lty=1)
+```
 
+Uncover the mystery of the Output in column 8.
+
+```{r}
+# What variable we had as Output?
+matplot(cbind(PCA.Yields$scores[,1],AssignmentData.Output,Factors[,1]),type="l",col=c("black","red","green"),lwd=c(3,2,1),lty=c(1,2,3),ylab="Factor 1")
+```
+
+Compare the regression coefficients from Step 2 and Step 3 with factor loadings.
+
+First, look at the slopes for `AssignmentData.Input~AssignmentData.Output`
+
+```{r}
+t(apply(AssignmentData, 2, function(AssignmentData.col) lm(AssignmentData.col~AssignmentData.Output)$coef))
 ```
 
 
 ```{r}
+cbind(PCA.Yields$center,PCA.Yields$loadings[,1])
+```
 
+This shows that the zero loading equals the vector of intercepts of models `Y~Output1`, where Y is one of the columns of yields in the data.
+Also, the slopes of the same models are equal to the first loading.
+
+Check if the same is true in the opposite direction: is there a correspondence between the coefficients of models Output1~Yield and the first loading.
+
+```{r}
+AssignmentData.Centered<-t(apply(AssignmentData,1,function(AssignmentData.row) AssignmentData.row-PCA.Yields$center))
+dim(AssignmentData.Centered)
 ```
 
 
 ```{r}
+t(apply(AssignmentData.Centered, 2, function(AssignmentData.col) lm(AssignmentData.Output~AssignmentData.col)$coef))
+```
 
+To recover the loading of the first factor by doing regression, use all inputs together.
+
+```{r}
+t(lm(AssignmentData.Output~AssignmentData.Centered)$coef)[-1]
 ```
 
 
 ```{r}
-
+PCA.Yields$loadings[,1]
 ```
 
+This means that the factor is a portfolio of all input variables with weights.
 
 ```{r}
-
+PCA.Yields$loadings[,1]
 ```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
