@@ -11,7 +11,7 @@ Completion:
   - [x] Step 2  
   - [x] Step 3  
   - [x] Step 4  
-  - [ ] Step 5  
+  - [x] Step 5  
   - [ ] Step 6  
   - [ ] Step 7  
 
@@ -403,34 +403,79 @@ variance and so the percentage is 0/total sum of squares.
 Compare models pairwise using anova()
 
 ```{r}
-anova(fullModel, nullModel)
+anova(nullModel, fullModel)
 ```
 
 **Interpret the results of anova().**
 
-## TODO
+The results of the function `anova` on two models show if model 2 is "different" than
+model 1 at a statisically significant level. That is, is the reduction in residual 
+sum of squares due to random chance? Generally, adding more predictors will increase
+the sum of squares explained, but does model 2 do this is a significant way?
 
-```{r}
-model12  <- lm(Output1~., data=AssignmentDataRegressionComparison[,c(1,2)])
-model246 <- lm(Output1~., data=AssignmentDataRegressionComparison[,c(2,4,6)])
-model16  <- lm(Output1~., data=AssignmentDataRegressionComparison[,c(1,6)])
-model17  <- lm(Output1~., data=AssignmentDataRegressionComparison[,c(1,7)])
-model67  <- lm(Output1~., data=AssignmentDataRegressionComparison[,c(6,7)])
-```
-
-```{r}
-anova(model12, model246, model16, model67)
-```
-
-## TODO
+The p-value here is basically 0. That is well below the threshold for significance.
+Anova is saying that there is good evidence that adding all the predictors to a model
+makes that model explain more of the variance than having no preditors in the model.
 
 **Repeat the analysis for different combinations of input variables and select the one you think is the best.**
 
-## TODO
+First I'll try to the first two predictors in the dataset: 3M & 6M
+
+```{r}
+model12  <- lm(Output1~., data=AssignmentDataRegressionComparison[,c(1,2)])
+anova(nullModel, model12, fullModel)
+```
+
+The ANOVA results here show that after using the first two predictors, 14044 sum of 
+squares remains unexplained. That's pretty good for starting with 637400 total sum
+of squares. By the full model all of the variance is explained. What I want to look
+for is a lot of explaination in that second row without adding a lot variables. Generally the fewer varables the better. You get almost all of the predictive power
+with less computation and complication. I suspect that the 3M and 6M interest rates
+are very tightly linked. It might be better to use more separation. 
+
+Try with 3M and 30Y
+
+```{r}
+model17  <- lm(Output1~., data=AssignmentDataRegressionComparison[,c(1,7)])
+anova(nullModel, model17, fullModel)
+```
+
+That's quite a bit better! Look at how little residual sum of squares if left after
+only using two predictors. This is a significantly better model for only two 
+predictors. 
+
+I still think we can do better. Let's try using three non-adjacent predictors.
+
+6M, 3Y, 10Y
+
+```{r}
+model246 <- lm(Output1~., data=AssignmentDataRegressionComparison[,c(2,4,6)])
+anova(nullModel, model246, fullModel)
+```
+
+Wow this model is bascially as good as the full model with half of the predictors. 
+This is probably the best model we're going to get. Let's try one more.
+
+3M & 10Y
+
+```{r}
+model16  <- lm(Output1~., data=AssignmentDataRegressionComparison[,c(1,6)])
+anova(nullModel, model16, fullModel)
+```
+
+Pretty darn good for only two predictors. 
 
 **Explain your selection.**
 
-## TODO
+I think that using the predictors 6M, 3Y and 10Y together yielded the best results. 
+While the full model explained 100% of the variance, this model explains 99.99% of 
+the results with half of the predictors. This makes a kind of intuitive sense since
+it uses a short, medium, and long-term bond as the predictors then all of the bases
+are covered.
+
+My second pick would be using the 3M & 10Y predictors. This model explained 99.85% of 
+the variance and at this point we're bascially splitting hairs. At only two predictors
+this model is the best bang for your buck.
 
 # Step 6.
 
