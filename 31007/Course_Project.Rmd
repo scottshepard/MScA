@@ -548,7 +548,7 @@ DailyDifferences <- plyr::ldply(DailyDifferencesList, data.frame)
 ```
 
 ```{r}
-rolling.sd<-rollapply(DailyDifferences, width=Window.width, by=Window.shift, by.column=TRUE, sd)
+rolling.sd <- rollapply(DailyDifferences, width=Window.width, by=Window.shift, by.column=TRUE, sd)
 head(rolling.sd)
 ```
 
@@ -571,7 +571,9 @@ Show periods of high volatility.
 
 **How is volatility related to the level of rates?**
 
-## TODO
+Volitility is spikiness, local spikiness. It's not related to overall total value
+of interest rates. It's associated with either steep inclines or steep declines in rates. The biggest spikes in volitieis came on '81, '87, and '08 during marketn crashes. I'm a little suprised that 2001 isn't higher. All three of those periods
+were local maximum in interest rates.
 
 ```{r}
 # Show periods of high volatility
@@ -583,7 +585,12 @@ Fit linear model to rolling window data using 3 months, 5 years and 30 years var
 
 ```{r}
 # Rolling lm coefficients
-Coefficients <- rollapply(AssignmentDataRegressionComparison, width=Window.width, by=Window.shift, by.column=FALSE, FUN=function(z) coef(lm(Output1 ~ USGG3M+USGG5YR+USGG30YR, data=as.data.frame(z))))
+Coefficients <- rollapply(AssignmentDataRegressionComparison, 
+                          width=Window.width, by=Window.shift, by.column=FALSE,
+                          FUN=function(z) {
+                            coef(lm(Output1 ~ USGG3M+USGG5YR+USGG30YR,
+                                    data=as.data.frame(z)))
+                          })
 rolling.dates <- rollapply(AssignmentDataRegressionComparison[,1:8], width=Window.width, by=Window.shift, by.column=FALSE, FUN=function(z) rownames(z))
 rownames(Coefficients) <- rolling.dates[,10]
 Coefficients[1:10,]
@@ -598,7 +605,18 @@ pairs(Coefficients)
 
 **Interpret the pairs plot.**
 
-## TODO
+A pairs plot like this plots each variable against the others. It is used to 
+visually compare interactions between predictors. Roughly, more linear shapes are 
+more correlated while blobier shapes are less correlated.
+
+The two most correlated predictors are the 5Y and 30Y rates. The pairs plot for those
+show an almost straight line. The rest of the pairs I would call bascially 
+uncorrelated. None of them particularly stand out, except for maybe 30Y and the 
+intercept, but that's a bit of a stretch.
+
+Finally, the direction of the relationship matters. The line formed by 30Y and 5Y has
+a negative slope. This indicates these are inversely correlated, meaning that we would
+expect the 30Y rate to rise as the 5Y fell and vice versa.
 
 Plot the coefficients. Show periods.
 
@@ -621,7 +639,13 @@ jump.slopes
 
 **Is the picture of coefficients consistent with the picture of pairs? If yes, explain why.**
 
-## TODO
+Yes the picture of coefficients is consitent with the pairs plot. The pairs plot
+shows that the 5Y and 30Y interest rates are inversely correlated. Here those rates
+are in red and green and they appear to go in opposite directions. The huge spikes
+in the red lines are accompanied by green spikes down below.
+
+Meanwhile the black 3M line doesn't go with either the green or red. That is also
+consistent with the pairs plot.
 
 How often the R-squared is not considered high?
 
