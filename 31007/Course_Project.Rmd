@@ -802,7 +802,28 @@ matplot(Maturities, Loadings, type="l", lty=1, col=c("black","red","green"), lwd
 
 **Interpret the factors by looking at the shapes of the loadings.**
 
-## TODO
+The loadings plot show how the different maturies make up each principal 
+component, or factor. The first principal component, that which explains most of the
+variance between the maturies, is made up pretty evenly between all of the predictors.
+The flat black negative line. This means that this 1st principal component has all 
+of the maturies negatively correlated with each other. This makes intutivie sense. 
+It says that most of the total variance (distance from grand mean) can be explained
+by a general negative trend among all of the maturies. Since all the interest rates have gone down over time, that seems about right. The 1st principal component then, is basically a stright negative regression line downwards. It says that all of the interest rates tend to move together. We've seen that before. It's not a surprising
+finding. The next components are more interesting.
+
+The second principal component in green is made up of negative short term rates 
+and positive medium and long term rates. This says that after all of the interest rates generally moving downwards together, the next largest piece of variance can be explained by short and medium/long-term moving in opposite directions. That is 
+interesting. These could be periods of high termoil, when the short term rates fall
+before the long term rates so they appear to be moving in opposite directions for 
+short time. Or it could be specific news announcements that might temporarily 
+depress short-term rates while accelerating long-term ones.
+
+Finally the third principal component in green is made up of positive short term
+and long term and negative medium term rates. This is when the 3M and 30Y rates 
+move together up but the 2 and 3 year rates move down. This could be market corrections
+after a huge volitility swing, or other weird abarations. This component
+accounts for less than 1% of the total variance so it's not explaining very much, only
+the edge case occurances.
 
 Calculate and plot 3 selected factors
 
