@@ -12,7 +12,7 @@ Completion:
   - [x] Step 3  
   - [x] Step 4  
   - [x] Step 5  
-  - [ ] Step 6  
+  - [x] Step 6  
   - [ ] Step 7  
 
 ```{r include=FALSE}
@@ -675,7 +675,15 @@ axis(side=1,at=1:1657,rownames(Coefficients))
 
 **What could cause decrease of R2?**
 
-## TODO
+R^2 is built using the 3M, 5Y, and 30Y predictors on Ouput1 over rolling 20 
+business day periods. The dates of the period are the center of the rolling 
+period. The R^2 of this model on almost all rolling periods is quite high. 
+There are only four instances when these three predictors cannot explain 90% 
+of the variance in the Output over the 20 day window. A drop in R^2 means that
+the one or more of the predictors is not working as expected, that during that window they somehow lacked the predictive power they normally had. It probably 
+means that one of the other interest rates not represented is driving Output1 
+during these periods. I would bet on the 10Y note since I hear about that one 
+the most on financial cable TV shows.
 
 Analyze the rolling p-values.
 
@@ -710,7 +718,36 @@ rownames(Pvalues)[Pvalues[,4] > 0.5]
 
 **Interpret the plot.**
 
-## TODO
+It really helps to view a large version of the p-value plot. Otherwise the 
+pure density of the green overcrowds the other colors. 
+
+This plot is showing the p-values of each predictor on the Output variable 
+over rolling 20 day windows. The vast majority of the p-values, 85% or so, 
+are less than the 0.05 threshold for statistical significance. That's pretty 
+encouraging. What is more interesting though is discrepency between how 
+frequently each of the columns has a p-value of over 0.05.
+
+```{r}
+apply(Pvalues, 2, function(col) mean(col<0.05))
+```
+
+The p-values for the intercept are _always_ less than 0.05. The next best
+is the 5YR note which comes in at 98%. This means that in 98% of the windows
+the 5YR note had a p-value associated with the model of less than 0.05. 
+Look at the 30YR note though. Barely half of the time that predictor 
+contributed to the model in a measureable way that was unlikely due to chance.
+
+The plot above bears this out. There are way more green values above the 0.05
+threshold than blue or red. The blue values that break 0.05 tend to be 
+clusteredaround the more recent years, mostly post 2000. That means that 
+since 2000 the 3M note has contributed less to the rolling window models than 
+before 2000. The red 5YR note is very consistently contributing to prediction
+except in 1987 when it had a string of bad prediction windows. As for the 
+green 30YR note, well it has been pretty bad in this method. It contributes 
+most to the model when the 3M and 5YR fail to contribute, like since 2000 and 
+during the 1987-1988 window when the 5YR was slipping. It seems to function
+more like a correcting variable than anything else, tweaking the model back
+into line when the 3M or 5YR have problems.
 
 # Step 7.
 
