@@ -13,7 +13,7 @@ Completion:
   - [x] Step 4  
   - [x] Step 5  
   - [x] Step 6  
-  - [ ] Step 7  
+  - [x] Step 7  
 
 ```{r include=FALSE}
 suppressWarnings(library(dplyr))
@@ -883,12 +883,39 @@ matplot(Maturities, Loadings, type="l", lty=1, col=c("black","red","green"), lwd
 
 
 ```{r}
-plot(Factors[,1], Factors[,2], type="l", lwd=2)
+plot(Factors[,1], Factors[,2], type="p", pch=20, cex=0.1, lwd=2)
+abline(v=0)
+abline(h=0)
 ```
 
 **Draw at least three conclusions from the plot of the first two factors above.**
 
-## TODO
+The plot above shows the opposite of factor one plotted against factor two.
+We can draw some conclusions based on the sign, density, and spread of 
+these variables.
+
+First look at the range of each factor. Factor one has a much larger range 
+than factor two. This makes sense if you look at the factors over time plot,
+Factor 1 is all the maturities combined together which tracked the overall 
+output from high to low over time. Factor 2 is a smaller subset of the 
+maturies and accounts for smaller changes across the overall rates. It has
+a much smaller range because it is not tracking the overall trend, but rather
+smaller swings related to a specific pattern that runs orthogonal to the 
+larger trend.
+
+Speaking of orthogonality, the two factors don't seem that correlated. By 
+drawing lines at x=0 and y=0 we can see that the four quadrants are more or 
+less evenly dense. It's not like factor 2 tends to be positive
+when factor 1 is positive or vice versa. This is good. We want factor 2 to 
+be picking up a different signal than factor one and if they were correlated
+then they would be picking up the same signal.
+
+Finally, the kind of wild, rambling nature of the plot gives a sense of 
+dynamism and mobility. The factors don't stay in one place for too long and 
+they hit all parts of the map. You can also tell that while they jump all 
+over the swings are smooth and not disjointed. There are no lines that cross
+from one spot of the plot to the other in a single jump, all points are related
+to a point nearby. The plot moves the most the farther away it is from zero.
 
 Analyze the adjustments that each factor makes to the term curve.
 
@@ -924,7 +951,34 @@ rbind(CurveChange, ModelCurveAdjustment.3Factors - OldCurve)
 
 **Explain how shapes of the loadings affect the adjustnents using only factor 1, factors 1 and 2, and all 3 factors.**
 
-## TODO
+The old curve and new curve here are the maturity rates on 7/17/1981 and 
+7/20/1981. The adjustments made by the factors show how using just three 
+principal components you can get at a very close approximation of the change
+of the curves.
+
+The first factor adjustment in green is a shifting upwards of the maturity 
+rates. This makes sense as we saw before from looking at the loadings that 
+the first principal component is made up of all the maturities pretty much
+evenly weighted with each other. So the first adjustment is correcting for 
+a change in the overall y-axis placement of the new curve. The green dotted
+line is the same shape as the black line, merely shifted upwards.
+
+The next adjustment is a rotation through the center. We know from looking at
+the loadings that the second principal component has short term and long term
+rates weighted opposite each other. So the second adjustment takes the 
+green line, shifts the short term rates up and the long term rates down, 
+effectively rotating the curve slightly about the center. The twice-adjusted
+blue dotted line is now really close to the red New Curve.
+
+The final adjustment made using the third pricipal component takes moves the
+short and longterm rates in the same direction while moving the medium term
+rates in the opposite. It is primarily trying to better fit the hump in 2YR 
+and 3YR rates.
+
+After three adjustments the adjusted curve fits the new curve quite well. 
+There is a little bit of tweaking left to do that further components could 
+take care of, jiggling the curve back and forth, but this is fit plenty good
+for any analysis and removes half of the dimensionality.
 
 See the goodness of fit for the example of 10Y yield.
 
