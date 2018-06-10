@@ -6,21 +6,16 @@ date: "5/8/2018"
 output: pdf_document
 ---
 
-Completion:  
-  - [x] Step 1  
-  - [x] Step 2  
-  - [x] Step 3  
-  - [x] Step 4  
-  - [x] Step 5  
-  - [x] Step 6  
-  - [x] Step 7  
+Welcome to Scott Shepard's course project for MScA 31007: Statistical
+Analysis. Thank you for taking the time to read through what ended up being
+quite an extensive document. All questions are marked with "Q:" and bolded.
 
 ```{r include=FALSE}
 suppressWarnings(library(dplyr))
 library(ggplot2)
 ```
 
-## Step 1.
+# Step 1
 
 Read the data and visualize and get familiar with the variables.
 
@@ -36,7 +31,9 @@ AssignmentData <- read.csv(
 head(AssignmentData)
 ```
 
-The first 7 variables (input variables) are the daily records of the US Treasury yields to maturity. The meaning of the variable Output will become clear later.
+The first 7 variables (input variables) are the daily records of the US 
+Treasury yields to maturity. The meaning of the variable Output will become
+clear later.
 
 Plot the input variables.
 
@@ -50,9 +47,10 @@ Plot the input variables together with the output variable.
 matplot(AssignmentData[,-c(9,10)], type='l')
 ```
 
-## Step 2
+# Step 2
 
-Estimate simple regression model with each of the input variables and the output variable given in AssignmentData.
+Estimate simple regression model with each of the input variables and the 
+output variable given in AssignmentData.
 
 ### Three Month Bill
 
@@ -77,10 +75,13 @@ This variable, `USGG3M`, which trackes the rates of three month treasury bonds,
 is quite a good predictor of `Output1`. The p-value indicates a statistically 
 significant slope. The adjusted R-squared is at 96% which is really high.
 
-The key value of 2.5 for the estimated slope indicates that when all 
+The key value of 2.5 for the estimated slope indicates that when all other
+predictors stay constant and USGGM3M moves one unit, the Output moves 2.5 
+units.
 
 ```{r}
-c(Total.Variance=var(AssignmentData[,8]), Unexplained.Variance=summary(m3M)$sigma^2)
+c(Total.Variance=var(AssignmentData[,8]), 
+  Unexplained.Variance=summary(m3M)$sigma^2)
 ```
 
 There remains only a small portion of the total variance that is unexplained.
@@ -103,7 +104,8 @@ The six-month yield input does an even better job of predicting `Output1` than
 the three-month yield did, explaining 97.4% of the variance.
 
 ```{r}
-c(Total.Variance=var(AssignmentData[,8]), Unexplained.Variance=summary(m6M)$sigma^2)
+c(Total.Variance=var(AssignmentData[,8]), 
+  Unexplained.Variance=summary(m6M)$sigma^2)
 ```
 
 There is less unexplained variance with this input variable, which matches
@@ -123,8 +125,12 @@ m2Y <- lm(Output1 ~ USGG2YR, data=AssignmentData)
 summary(m2Y)
 ```
 
+The two-year note is fantastic at explaining Output1. Man that R^2 value is 
+amazing, it's bascially one. And the p-value here is basically zero.
+
 ```{r}
-c(Total.Variance=var(AssignmentData[,8]), Unexplained.Variance=summary(m2Y)$sigma^2)
+c(Total.Variance=var(AssignmentData[,8]), 
+  Unexplained.Variance=summary(m2Y)$sigma^2)
 ```
 
 ```{r}
@@ -141,7 +147,8 @@ summary(m3Y)
 ```
 
 ```{r}
-c(Total.Variance=var(AssignmentData[,8]),Unexplained.Variance=summary(m3Y)$sigma^2)
+c(Total.Variance=var(AssignmentData[,8]),
+  Unexplained.Variance=summary(m3Y)$sigma^2)
 ```
 
 ```{r}
@@ -158,7 +165,8 @@ summary(m5Y)
 ```
 
 ```{r}
-c(Total.Variance=var(AssignmentData[,8]), Unexplained.Variance=summary(m5Y)$sigma^2)
+c(Total.Variance=var(AssignmentData[,8]), 
+  Unexplained.Variance=summary(m5Y)$sigma^2)
 ```
 
 ```{r}
@@ -175,7 +183,8 @@ summary(m10)
 ```
 
 ```{r}
-c(Total.Variance=var(AssignmentData[,8]), Unexplained.Variance=summary(m10)$sigma^2)
+c(Total.Variance=var(AssignmentData[,8]), 
+  Unexplained.Variance=summary(m10)$sigma^2)
 ```
 
 ```{r}
@@ -192,7 +201,8 @@ summary(m30)
 ```
 
 ```{r}
-c(Total.Variance=var(AssignmentData[,8]), Unexplained.Variance=summary(m30)$sigma^2)
+c(Total.Variance=var(AssignmentData[,8]), 
+  Unexplained.Variance=summary(m30)$sigma^2)
 ```
 
 ```{r}
@@ -202,7 +212,8 @@ lines(m30$fitted.values, col="red")
 
 ### All Together Now
 
-Collect all slopes and intercepts in one table and print this table. Try to do it in one line using apply() function.
+**Q: Collect all slopes and intercepts in one table and print this table.**
+**Try to do it in one line using apply() function.**
 
 ```{r}
 Output1 <- AssignmentData$Output1
@@ -211,24 +222,28 @@ t(apply(AssignmentData[,-c(8:10)], 2, function(x) lm(Output1~x)$coef))
 
 # Step 3
 
-Fit linear regression models using single output (column 8 Output1) as input and each of the original inputs as outputs.
+Fit linear regression models using single output (column 8 Output1) as input 
+and each of the original inputs as outputs.
 
-Collect all slopes and intercepts in one table and print this table.
+**Q: Collect all slopes and intercepts in one table and print this table.**
 ```{r}
 t(apply(AssignmentData[,-c(8:10)], 2, function(y) lm(y~Output1)$coef))
 ```
 
 # Step 4
 
-Estimate logistic regression using all inputs and the data on FED tightening and easing cycles.
+Estimate logistic regression using all inputs and the data on FED tightening 
+and easing cycles.
 
 ```{r}
 AssignmentDataLogistic <- data.frame(data.matrix(AssignmentData, rownames.force="automatic"))
 ```
 
 Prepare the easing-tightening data.
+
 Make the easing column equal to 0 during the easing periods and NA otherwise.
-Make the tightening column equal to 1 during the tightening periods and NA otherwise.
+Make the tightening column equal to 1 during the tightening periods and NA 
+otherwise.
 
 ```{r}
 # Create columns of easing periods (as 0s) and tightening periods (as 1s)
@@ -246,14 +261,18 @@ All.NAs <- is.na(EasingPeriods)&is.na(TighteningPeriods)
 AssignmentDataLogistic.EasingTighteningOnly <- AssignmentDataLogistic
 AssignmentDataLogistic.EasingTighteningOnly[,9] <- EasingPeriods
 AssignmentDataLogistic.EasingTighteningOnly <- AssignmentDataLogistic.EasingTighteningOnly[!All.NAs,]
-AssignmentDataLogistic.EasingTighteningOnly[is.na(AssignmentDataLogistic.EasingTighteningOnly[,10]),10] <- 0
+AssignmentDataLogistic.EasingTighteningOnly[
+  is.na(AssignmentDataLogistic.EasingTighteningOnly[,10]),10] <- 0
 # Binary output for logistic regression is now in column 10
 ```
 
-Plot the data and the binary output variable representing easing (0) and tightening (1) periods.
+Plot the data and the binary output variable representing easing (0) and 
+tightening (1) periods.
 
 ```{r}
-matplot(AssignmentDataLogistic.EasingTighteningOnly[,-c(9,10)], type="l", ylab="Data and Binary Fed Mode")
+matplot(AssignmentDataLogistic.EasingTighteningOnly[,-c(9,10)],
+        type="l", 
+        ylab="Data and Binary Fed Mode")
 lines(AssignmentDataLogistic.EasingTighteningOnly[,10]*20, col="red")
 ```
 
@@ -268,7 +287,8 @@ summary(LogisticModel.TighteningEasing_3M)
 ```
 
 ```{r}
-matplot(AssignmentDataLogistic.EasingTighteningOnly[,-c(9,10)], type="l", ylab="Data and Fitted Values")
+matplot(AssignmentDataLogistic.EasingTighteningOnly[,-c(9,10)], type="l", 
+        ylab="Data and Fitted Values")
 lines(AssignmentDataLogistic.EasingTighteningOnly[,10]*20, col="red")
 lines(LogisticModel.TighteningEasing_3M$fitted.values*20, col="green")
 ```
@@ -286,23 +306,24 @@ summary(LogisticModel.TighteningEasing_All)$coefficients[,c(1,4)]
 ```
 
 ```{r}
-matplot(AssignmentDataLogistic.EasingTighteningOnly[,-c(9,10)], type="l", ylab="Results of Logistic Regression")
+matplot(AssignmentDataLogistic.EasingTighteningOnly[,-c(9,10)], type="l",
+        ylab="Results of Logistic Regression")
 lines(AssignmentDataLogistic.EasingTighteningOnly[,10]*20, col="red")
 lines(LogisticModel.TighteningEasing_All$fitted.values*20, col="green")
 ```
 
-**Interpret the coefficients of the model and the fitted values.**
+**Q: Interpret the coefficients of the model and the fitted values.**
 
 The logistic model on predicting tightening tries to use all of the treasury 
-note date to predict whether the fed will be easiing or tightening interest 
-rates. An easing period is when the FED is lowering interest rates while 
-a tightening period is when the FED is raising interest rates.
+note date to predict whether the Fed will be easiing or tightening interest 
+rates. An easing period is when the Fed is lowering interest rates while 
+a tightening period is when the Fed is raising interest rates.
 
 In this model we are looking at all the data across all periods. The bright 
-green line is the predicted easing/tightening probabiliyt. It's all over the 
+green line is the predicted easing/tightening probability. It's all over the 
 map. While the model correctly gets the first and third tightening cycles,
 it erroneously predicts two tightening cycles in the beginning where there
-is none, and in the second real tightening cycle the predicted values 
+are none, and in the second real tightening cycle the predicted values 
 drop off very quickly while the tightening actually continued for a brief 
 period. This is not a very good model.
 
@@ -311,11 +332,13 @@ the model is too sensitive to minor swings. The y-intercept says we start
 in an easing cycle, which is true. Then all of the variables should be 
 correlated in the same direction but they are not. The negative 3M coeffienct
 means that as the 3M treasury note's interest rate rises, the model predicts
-easing, not tightening. The same is true on the 3Y, 5Y, and 10Y notes. Meanwhile
-the 6M, 2Y and 30Y inputs predict tightening as their yields rise. This doesn't
-make a lot of sense and I think is evidence that the model is overfitted.
+easing, not tightening. The same is true on the 3Y, 5Y, and 10Y notes. 
+Meanwhile the 6M, 2Y and 30Y inputs predict tightening as their yields rise. 
+This doesn't make a lot of sense and I think is evidence that the model is 
+overfitted.
 
-Calculate and plot log-odds and probabilities. Compare probabilities with fitted values.
+Calculate and plot log-odds and probabilities. Compare probabilities with 
+fitted values.
 
 ```{r}
 # Calculate odds
@@ -325,16 +348,19 @@ plot(Log.Odds,type="l")
 
 ```{r}
 Probabilities<-1/(exp(-Log.Odds)+1)
-plot(LogisticModel.TighteningEasing_All$fitted.values, type="l", ylab="Fitted Values & Log-Odds")
+plot(LogisticModel.TighteningEasing_All$fitted.values, type="l", 
+     ylab="Fitted Values & Log-Odds")
 lines(Probabilities,col="red")
 ```
 
-# Step 5.
+# Step 5
 
 Compare linear regression models with different combinations of predictors.
 Select the best combination.
 
-Below we show only two of possible combinations: full model containing all 7 predictors and Null model containing only intercept, but none of the 7 predictors.
+Below we show only two of possible combinations: full model containing all 7 predictors and Null model containing only intercept, but none of the 7 
+predictors. 
+
 Estimate other possible combinations.
 
 ### Full Model
@@ -372,7 +398,7 @@ fullModel.summary[c('r.squared','adj.r.squared')]
 fullModel.summary$df
 ```
 
-**Intepret the fitted model. How good is the fit? How significant are the parameters?**
+**Q: Intepret the fitted model. How good is the fit? How significant are the parameters?**
 
 The fitted model with all seven predictors is perfectly fitted. Both the R^2 
 and adjusted R^2 are 1. This means that 100% of the variance is explained by 
@@ -393,7 +419,7 @@ nullModel.summary <- summary(nullModel)
 (nullModel.summary$df)
 ```
 
-**Why does summary(nullModel) not show R^2?**
+**Q: Why does summary(nullModel) not show R^2?**
 
 R^2 is not shown because there is no explained varianced in this model. R^2
 is the ratio of explained to total variance. Total variance is the distance
@@ -406,18 +432,21 @@ Compare models pairwise using anova()
 anova(nullModel, fullModel)
 ```
 
-**Interpret the results of anova().**
+**Q: Interpret the results of anova().**
 
-The results of the function `anova` on two models show if model 2 is "different" than
-model 1 at a statisically significant level. That is, is the reduction in residual 
-sum of squares due to random chance? Generally, adding more predictors will increase
-the sum of squares explained, but does model 2 do this is a significant way?
+The results of the function `anova` on two models show if model 2 is 
+"different" than model 1 at a statisically significant level. That is, is the 
+reduction in residual sum of squares due to random chance? Generally, adding 
+more predictors will increase the sum of squares explained, but does model 2 
+do this is a significant way?
 
-The p-value here is basically 0. That is well below the threshold for significance.
-Anova is saying that there is good evidence that adding all the predictors to a model
-makes that model explain more of the variance than having no preditors in the model.
+The p-value here is basically 0. That is well below the threshold for 
+significance. Anova is saying that there is good evidence that adding all the
+predictors to a model makes that model explain more of the variance than 
+having no preditors in the model.
 
-**Repeat the analysis for different combinations of input variables and select the one you think is the best.**
+**Q: Repeat the analysis for different combinations of input variables and**
+**select the one you think is the best.**
 
 First I'll try to the first two predictors in the dataset: 3M & 6M
 
@@ -426,12 +455,14 @@ model12  <- lm(Output1~., data=AssignmentDataRegressionComparison[,c(1,2)])
 anova(nullModel, model12, fullModel)
 ```
 
-The ANOVA results here show that after using the first two predictors, 14044 sum of 
-squares remains unexplained. That's pretty good for starting with 637400 total sum
-of squares. By the full model all of the variance is explained. What I want to look
-for is a lot of explaination in that second row without adding a lot variables. Generally the fewer varables the better. You get almost all of the predictive power
-with less computation and complication. I suspect that the 3M and 6M interest rates
-are very tightly linked. It might be better to use more separation. 
+The ANOVA results here show that after using the first two predictors, 14044 
+sum of squares remains unexplained. That's pretty good for starting with 637400 
+total sum of squares. By the full model all of the variance is explained. 
+What I want to look for is a lot of explaination in that second row without 
+adding a lot variables. Generally the fewer varables the better. You get 
+almost all of the predictive power with less computation and complication. 
+I suspect that the 3M and 6M interest rates are very tightly linked. 
+It might be better to use more separation. 
 
 Try with 3M and 30Y
 
@@ -440,9 +471,9 @@ model17  <- lm(Output1~., data=AssignmentDataRegressionComparison[,c(1,7)])
 anova(nullModel, model17, fullModel)
 ```
 
-That's quite a bit better! Look at how little residual sum of squares if left after
-only using two predictors. This is a significantly better model for only two 
-predictors. 
+That's quite a bit better! Look at how little residual sum of squares if left 
+after only using two predictors. This is a significantly better model for only 
+two predictors. 
 
 I still think we can do better. Let's try using three non-adjacent predictors.
 
@@ -453,7 +484,8 @@ model246 <- lm(Output1~., data=AssignmentDataRegressionComparison[,c(2,4,6)])
 anova(nullModel, model246, fullModel)
 ```
 
-Wow this model is bascially as good as the full model with half of the predictors. 
+Wow this model is bascially as good as the full model with half of the 
+predictors. 
 This is probably the best model we're going to get. Let's try one more.
 
 3M & 10Y
@@ -465,19 +497,19 @@ anova(nullModel, model16, fullModel)
 
 Pretty darn good for only two predictors. 
 
-**Explain your selection.**
+**Q: Explain your selection.**
 
-I think that using the predictors 6M, 3Y and 10Y together yielded the best results. 
-While the full model explained 100% of the variance, this model explains 99.99% of 
-the results with half of the predictors. This makes a kind of intuitive sense since
-it uses a short, medium, and long-term bond as the predictors then all of the bases
-are covered.
+I think that using the predictors 6M, 3Y and 10Y together yielded the best 
+results. While the full model explained 100% of the variance, this model 
+explains 99.99% of the results with half of the predictors. This makes a kind 
+of intuitive sense since it uses a short, medium, and long-term bond as the 
+predictors then all of the bases are covered.
 
-My second pick would be using the 3M & 10Y predictors. This model explained 99.85% of 
-the variance and at this point we're bascially splitting hairs. At only two predictors
-this model is the best bang for your buck.
+My second pick would be using the 3M & 10Y predictors. This model explained 
+99.85% of the variance and at this point we're bascially splitting hairs. 
+At only two predictors this model is the best bang for your buck.
 
-# Step 6.
+# Step 6
 
 Perform rolling window analysis of the yields data.
 Use package zoo for rolling window analysis.
@@ -521,7 +553,8 @@ length(Points.of.calculation)
 ```
 
 ```{r}
-# Insert means into the total length vector to plot the rolling mean with the original data
+# Insert means into the total length vector to plot the rolling mean with the 
+# original data
 Means.forPlot <- rep(NA, length(AssignmentDataRegressionComparison[,1]))
 Means.forPlot[Points.of.calculation] <- all.means[,1]
 Means.forPlot[1:50]
@@ -553,7 +586,8 @@ head(rolling.sd)
 ```
 
 ```{r}
-rolling.dates <- rollapply(AssignmentDataRegressionComparison[-1,], width=Window.width, by=Window.shift, by.column=FALSE, FUN=function(z) rownames(z))
+rolling.dates <- rollapply(AssignmentDataRegressionComparison[-1,], width=Window.width, by=Window.shift, by.column=FALSE, 
+                           FUN=function(z) rownames(z))
 head(rolling.dates)
 ```
 
@@ -569,11 +603,13 @@ axis(side=1, at=1:1656, rownames(rolling.sd))
 
 Show periods of high volatility. 
 
-**How is volatility related to the level of rates?**
+**Q: How is volatility related to the level of rates?**
 
-Volitility is spikiness, local spikiness. It's not related to overall total value
-of interest rates. It's associated with either steep inclines or steep declines in rates. The biggest spikes in volitieis came on '81, '87, and '08 during marketn crashes. I'm a little suprised that 2001 isn't higher. All three of those periods
-were local maximum in interest rates.
+Volitility is spikiness, local spikiness. It's not related to overall total 
+value of interest rates. It's associated with either steep inclines or steep 
+declines in rates. The biggest spikes in volitieis came on '81, '87, and '08 
+during marketn crashes. I'm a little suprised that 2001 isn't higher. 
+All three of those periods were local maximum in interest rates.
 
 ```{r}
 # Show periods of high volatility
@@ -581,7 +617,8 @@ high.volatility.periods <- rownames(rolling.sd)[rolling.sd[,8]>.5]
 high.volatility.periods
 ```
 
-Fit linear model to rolling window data using 3 months, 5 years and 30 years variables as predictors.
+Fit linear model to rolling window data using 3 months, 5 years and 30 years 
+variables as predictors.
 
 ```{r}
 # Rolling lm coefficients
@@ -591,32 +628,36 @@ Coefficients <- rollapply(AssignmentDataRegressionComparison,
                             coef(lm(Output1 ~ USGG3M+USGG5YR+USGG30YR,
                                     data=as.data.frame(z)))
                           })
-rolling.dates <- rollapply(AssignmentDataRegressionComparison[,1:8], width=Window.width, by=Window.shift, by.column=FALSE, FUN=function(z) rownames(z))
+rolling.dates <- rollapply(AssignmentDataRegressionComparison[,1:8], width=Window.width, by=Window.shift, by.column=FALSE, 
+                           FUN=function(z) rownames(z))
 rownames(Coefficients) <- rolling.dates[,10]
 Coefficients[1:10,]
 ```
 
-Look at pairwise X-Y plots of regression coefficients for the 3M, 5Yr and 30Yr yields as inputs.
+Look at pairwise X-Y plots of regression coefficients for the 3M, 5Yr and 
+30Yr yields as inputs.
 
 ```{r}
 # Pairs plot of Coefficients
 pairs(Coefficients)
 ```
 
-**Interpret the pairs plot.**
+**Q: Interpret the pairs plot.**
 
 A pairs plot like this plots each variable against the others. It is used to 
-visually compare interactions between predictors. Roughly, more linear shapes are 
-more correlated while blobier shapes are less correlated.
+visually compare interactions between predictors. Roughly, more linear shapes 
+are more correlated while blobier shapes are less correlated.
 
-The two most correlated predictors are the 5Y and 30Y rates. The pairs plot for those
-show an almost straight line. The rest of the pairs I would call bascially 
-uncorrelated. None of them particularly stand out, except for maybe 30Y and the 
-intercept, but that's a bit of a stretch.
+The two most correlated predictors are the 5Y and 30Y rates. The pairs plot 
+for those show an almost straight line. The rest of the pairs I would call 
+bascially uncorrelated. 
+None of them particularly stand out, except for maybe 30Y and the intercept, 
+but that's a bit of a stretch.
 
-Finally, the direction of the relationship matters. The line formed by 30Y and 5Y has
-a negative slope. This indicates these are inversely correlated, meaning that we would
-expect the 30Y rate to rise as the 5Y fell and vice versa.
+Finally, the direction of the relationship matters. 
+The line formed by 30Y and 5Y has a negative slope. 
+This indicates these are inversely correlated, meaning that we would expect
+the 30Y rate to rise as the 5Y fell and vice versa.
 
 Plot the coefficients. Show periods.
 
@@ -637,15 +678,17 @@ high.slopespread.periods
 jump.slopes
 ```
 
-**Is the picture of coefficients consistent with the picture of pairs? If yes, explain why.**
+**Q: Is the picture of coefficients consistent with the picture of pairs? **
+**If yes, explain why.**
 
-Yes the picture of coefficients is consitent with the pairs plot. The pairs plot
-shows that the 5Y and 30Y interest rates are inversely correlated. Here those rates
-are in red and green and they appear to go in opposite directions. The huge spikes
-in the red lines are accompanied by green spikes down below.
+Yes the picture of coefficients is consitent with the pairs plot. 
+The pairs plot shows that the 5Y and 30Y interest rates are inversely
+correlated. Here those rates are in red and green and they appear to go in 
+opposite directions. The huge spikes in the red lines are accompanied by 
+green spikes down below.
 
-Meanwhile the black 3M line doesn't go with either the green or red. That is also
-consistent with the pairs plot.
+Meanwhile the black 3M line doesn't go with either the green or red. 
+That is also consistent with the pairs plot.
 
 How often the R-squared is not considered high?
 
@@ -673,14 +716,15 @@ axis(side=1,at=1:1657,rownames(Coefficients))
 (low.r.squared.periods<-r.squared[r.squared[,2]<.9,1])
 ```
 
-**What could cause decrease of R2?**
+**Q: What could cause decrease of R2?**
 
 R^2 is built using the 3M, 5Y, and 30Y predictors on Ouput1 over rolling 20 
 business day periods. The dates of the period are the center of the rolling 
 period. The R^2 of this model on almost all rolling periods is quite high. 
 There are only four instances when these three predictors cannot explain 90% 
 of the variance in the Output over the 20 day window. A drop in R^2 means that
-the one or more of the predictors is not working as expected, that during that window they somehow lacked the predictive power they normally had. It probably 
+the one or more of the predictors is not working as expected, that during that 
+window they somehow lacked the predictive power they normally had. It probably 
 means that one of the other interest rates not represented is driving Output1 
 during these periods. I would bet on the 10Y note since I hear about that one 
 the most on financial cable TV shows.
@@ -689,8 +733,12 @@ Analyze the rolling p-values.
 
 ```{r}
 # P-values
-Pvalues <- rollapply(AssignmentDataRegressionComparison, width=Window.width, by=Window.shift, by.column=FALSE, FUN=function(z)
-  summary(lm(Output1~USGG3M+USGG5YR+USGG30YR,data=as.data.frame(z)))$coefficients[,4])
+Pvalues <- rollapply(AssignmentDataRegressionComparison, width=Window.width,
+                     by=Window.shift, by.column=FALSE, 
+                     FUN=function(z) {
+                       summary(lm(Output1~USGG3M+USGG5YR+USGG30YR,
+                                  data=as.data.frame(z)))$coefficients[,4]
+                     })
 rownames(Pvalues) <- rolling.dates[,10]
 Pvalues[1:10,]
 ```
@@ -716,7 +764,7 @@ rownames(Pvalues)[Pvalues[,3] > 0.5]
 rownames(Pvalues)[Pvalues[,4] > 0.5]
 ```
 
-**Interpret the plot.**
+**Q: Interpret the plot.**
 
 It really helps to view a large version of the p-value plot. Otherwise the 
 pure density of the green overcrowds the other colors. 
@@ -749,7 +797,7 @@ during the 1987-1988 window when the 5YR was slipping. It seems to function
 more like a correcting variable than anything else, tweaking the model back
 into line when the 3M or 5YR have problems.
 
-# Step 7.
+# Step 7
 
 Perform PCA with the inputs (columns 1-7).
 
@@ -778,7 +826,8 @@ library(rgl)
 rgl.points(AssignmentData.3M_2Y_5Y)
 ```
 
-Analyze the covariance matrix of the data. Compare results of manual calculation and `cov()`
+Analyze the covariance matrix of the data. Compare results of manual 
+calculation and `cov()`
 
 ```{r}
 # Covariance of X & Y is sum((X-Xbar)*(Y-Ybar))/(n-1)
@@ -805,9 +854,11 @@ Maturities<-c(.25,.5,2,3,5,10,30)
 contour(Maturities,Maturities,Covariance.Matrix)
 ```
 
-Perform the PCA by manually calculating factors, loadings and analyzing the importance of factors.
+Perform the PCA by manually calculating factors, loadings and analyzing the 
+importance of factors.
 
-Find eigenvalues and eigenvectors. Calculate vector of means (zero loading), first 3 loadings and 3 factors.
+Find eigenvalues and eigenvectors. Calculate vector of means (zero loading), 
+first 3 loadings and 3 factors.
 
 ```{r}
 Eigen.Decomposition = eigen(Covariance.Matrix)
@@ -834,33 +885,41 @@ barplot(Eigen.Values/sum(Eigen.Values), width=2, col = "black", names.arg=c("F1"
 
 
 ```{r}
-matplot(Maturities, Loadings, type="l", lty=1, col=c("black","red","green"), lwd=3)
+matplot(Maturities, Loadings, type="l", lty=1, 
+        col=c("black","red","green"), lwd=3)
 ```
 
-**Interpret the factors by looking at the shapes of the loadings.**
+**Q: Interpret the factors by looking at the shapes of the loadings.**
 
 The loadings plot show how the different maturies make up each principal 
-component, or factor. The first principal component, that which explains most of the
-variance between the maturies, is made up pretty evenly between all of the predictors.
-The flat black negative line. This means that this 1st principal component has all 
-of the maturies negatively correlated with each other. This makes intutivie sense. 
-It says that most of the total variance (distance from grand mean) can be explained
-by a general negative trend among all of the maturies. Since all the interest rates have gone down over time, that seems about right. The 1st principal component then, is basically a stright negative regression line downwards. It says that all of the interest rates tend to move together. We've seen that before. It's not a surprising
+component, or factor. The first principal component, that which explains 
+most of the variance between the maturies, is made up pretty evenly between 
+all of the predictors. The flat black negative line. This means that this 1st
+principal component has all of the maturies negatively correlated with each 
+other. This makes intutivie sense. It says that most of the total variance 
+(distance from grand mean) can be explained by a general negative trend among 
+all of the maturies. Since all the interest rates have gone down over time, 
+that seems about right. The 1st principal component then, is basically a 
+straight negative regression line downwards. It says that all of the interest 
+rates tend to move together. We've seen that before. It's not a surprising
 finding. The next components are more interesting.
 
-The second principal component in green is made up of negative short term rates 
-and positive medium and long term rates. This says that after all of the interest rates generally moving downwards together, the next largest piece of variance can be explained by short and medium/long-term moving in opposite directions. That is 
-interesting. These could be periods of high termoil, when the short term rates fall
-before the long term rates so they appear to be moving in opposite directions for 
-short time. Or it could be specific news announcements that might temporarily 
-depress short-term rates while accelerating long-term ones.
+The second principal component in green is made up of negative short term 
+rates and positive medium and long term rates. This says that after all of the
+interest rates generally moving downwards together, the next largest piece of 
+variance can be explained by short and medium/long-term moving in opposite 
+directions. That is interesting. These could be periods of high termoil, 
+when the short term rates fall before the long term rates so they appear to be
+moving in opposite directions for short time. Or it could be specific news
+announcements that might temporarily depress short-term rates while 
+accelerating long-term ones.
 
-Finally the third principal component in green is made up of positive short term
-and long term and negative medium term rates. This is when the 3M and 30Y rates 
-move together up but the 2 and 3 year rates move down. This could be market corrections
-after a huge volitility swing, or other weird abarations. This component
-accounts for less than 1% of the total variance so it's not explaining very much, only
-the edge case occurances.
+Finally the third principal component in green is made up of positive short 
+term and long term and negative medium term rates. This is when the 3M and 30Y 
+rates move together up but the 2 and 3 year rates move down. This could be 
+market corrections after a huge volitility swing, or other weird abarations. 
+This component accounts for less than 1% of the total variance so it's not 
+explaining very much, only the edge case occurances.
 
 Calculate and plot 3 selected factors
 
@@ -888,7 +947,7 @@ abline(v=0)
 abline(h=0)
 ```
 
-**Draw at least three conclusions from the plot of the first two factors above.**
+**Q: Draw at least three conclusions from the plot of the first two factors above.**
 
 The plot above shows the opposite of factor one plotted against factor two.
 We can draw some conclusions based on the sign, density, and spread of 
@@ -930,13 +989,15 @@ ModelCurveAdjustment.2Factors <-
 ModelCurveAdjustment.3Factors <- 
   OldCurve+t(Loadings[,1])*FactorsChange[1]+t(Loadings[,2])*FactorsChange[2]+
   t(Loadings[,3])*FactorsChange[3]
-matplot(Maturities, 
-        t(rbind(OldCurve,NewCurve,ModelCurveAdjustment.1Factor,ModelCurveAdjustment.2Factors, ModelCurveAdjustment.3Factors)),
+matplot(Maturities,
+        t(rbind(OldCurve,NewCurve,ModelCurveAdjustment.1Factor,
+                ModelCurveAdjustment.2Factors, ModelCurveAdjustment.3Factors)),
         type="l",
         lty=c(1,1,2,2,2),
         col=c("black","red","green","blue","magenta"),
         lwd=3,
         ylab="Curve Adjustment")
+
 legend(x="topright", 
        c("Old Curve","New Curve","1-Factor Adj.", "2-Factor Adj.", "3-Factor Adj."),
        lty=c(1,1,2,2,2), 
@@ -949,7 +1010,8 @@ legend(x="topright",
 rbind(CurveChange, ModelCurveAdjustment.3Factors - OldCurve)
 ```
 
-**Explain how shapes of the loadings affect the adjustnents using only factor 1, factors 1 and 2, and all 3 factors.**
+**Q: Explain how shapes of the loadings affect the adjustnents using only **
+**factor 1, factors 1 and 2, and all 3 factors.**
 
 The old curve and new curve here are the maturity rates on 7/17/1981 and 
 7/20/1981. The adjustments made by the factors show how using just three 
@@ -988,7 +1050,8 @@ cbind(Maturities,Loadings)
 
 
 ```{r}
-Model.10Y <- L0[6] + Loadings[6,1] * Factors[,1]+Loadings[6,2] * Factors[,2] + Loadings[6,3] * Factors[,3]
+Model.10Y <- L0[6] + Loadings[6,1] * Factors[,1] + Loadings[6,2] * Factors[,2] +
+  Loadings[6,3] * Factors[,3]
 matplot(cbind(AssignmentData[,6], Model.10Y), type="l", lty=1, lwd=c(3,1), col=c("black","red"), ylab="5Y Yield")
 ```
 
@@ -1007,12 +1070,14 @@ cbind(PCA.Yields$loadings[,1:3], Maturities,Loadings)
 
 
 ```{r}
-matplot(Maturities, PCA.Yields$loadings[,1:3], type="l", col=c("black","red","green"), lty=1, lwd=3)
+matplot(Maturities, PCA.Yields$loadings[,1:3], type="l", 
+        col=c("black","red","green"), lty=1, lwd=3)
 ```
 
 
 ```{r}
-matplot(PCA.Yields$scores[,1:3], type="l", col=c("black","red","green"), lwd=3, lty=1)
+matplot(PCA.Yields$scores[,1:3], type="l", col=c("black","red","green"), 
+        lwd=3, lty=1)
 ```
 
 Change the signs of the first factor and factor loading again.
@@ -1021,19 +1086,23 @@ Change the signs of the first factor and factor loading again.
 # Change the signs of the 1st factor and the first loading
 PCA.Yields$loadings[,1] <- -PCA.Yields$loadings[,1]
 PCA.Yields$scores[,1] <- -PCA.Yields$scores[,1]
-matplot(Maturities,PCA.Yields$loadings[,1:3], type="l", col=c("black","red","green"), lty=1, lwd=3)
+matplot(Maturities,PCA.Yields$loadings[,1:3], type="l", 
+        col=c("black","red","green"), lty=1, lwd=3)
 ```
 
 
 ```{r}
-matplot(PCA.Yields$scores[,1:3], type="l", col=c("black","red","green"), lwd=3, lty=1)
+matplot(PCA.Yields$scores[,1:3], type="l", col=c("black","red","green"), 
+        lwd=3, lty=1)
 ```
 
 Uncover the mystery of the Output in column 8.
 
 ```{r}
 # What variable we had as Output?
-matplot(cbind(PCA.Yields$scores[,1], AssignmentData.Output,Factors[,1]), type="l", col=c("black","red","green"), lwd=c(3,2,1), lty=c(1,2,3), ylab="Factor 1")
+matplot(cbind(PCA.Yields$scores[,1], AssignmentData.Output,Factors[,1]), 
+        type="l", col=c("black","red","green"), lwd=c(3,2,1), lty=c(1,2,3),
+        ylab="Factor 1")
 ```
 
 Compare the regression coefficients from Step 2 and Step 3 with factor loadings.
@@ -1052,7 +1121,8 @@ cbind(PCA.Yields$center, PCA.Yields$loadings[,1])
 This shows that the zero loading equals the vector of intercepts of models `Y~Output1`, where Y is one of the columns of yields in the data.
 Also, the slopes of the same models are equal to the first loading.
 
-Check if the same is true in the opposite direction: is there a correspondence between the coefficients of models Output1~Yield and the first loading.
+Check if the same is true in the opposite direction: is there a correspondence 
+between the coefficients of models Output1~Yield and the first loading.
 
 ```{r}
 AssignmentData.Centered<-t(apply(AssignmentData, 1, function(AssignmentData.row)
