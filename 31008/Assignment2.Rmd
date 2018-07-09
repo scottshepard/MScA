@@ -1,0 +1,334 @@
+---
+title: "31008: Assignment 2"
+author: "Scott Shepard"
+date: "7/5/2018"
+output: pdf_document
+---
+
+# Introduction
+
+In this assignment I perform differnet numerical clustering algorithms on
+the German Credit dataset for market segmentation. The purpose is to practice
+and show the differences between k-means and ko-means clustering algorithms.
+
+First I'll split the data into training and test sets, then perform clustering
+using first the k-means and then ko-means. Finally I'll compare the two and 
+outline an approach for conducting a focus group on the segments.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(ggplot2)
+```
+
+```{r functions}
+splitData <- function(data, smp_size) {
+  # Take a dataset and split it randomly into train and test sets
+  # The size of the training set is the smp_size argument
+  train_ind <- sample(seq_len(nrow(data)), size = smp_size)
+  train <- data[ train_ind, ]
+  test  <- data[-train_ind, ]
+  
+  list("train"=train, "test"=test)
+}
+
+varianceAccountedFor <- function(model) {
+  with(model, betweenss / totss)
+}
+```
+
+```{r data}
+library(caret)
+data("GermanCredit")
+data_list <- splitData(GermanCredit, 632)
+Train <- data_list$train
+Test  <- data_list$test
+```
+
+# K Means
+
+Only the first seven variables are numeric. I've chosen to split groups on 
+Duration, Amount, and APR. I think these variables lead to understandable 
+splits. Also from some exploratory analysis I was unable to achieve good
+separation on the other variables.
+
+```{r clustes}
+set.seed(123)
+km_list <- lapply(2:10, function(k) {
+  kmeans(Train[,c(1,2,3)], k,  nstart = 100)
+})
+
+vafs <- plyr::ldply(km_list, function(km) {
+  vaf <- varianceAccountedFor(km)
+  data.frame(k=nrow(km$centers), vaf=vaf) 
+})
+```
+
+How to pick the appropriate number of clusters? In this case we can look at 
+the scree plot and pick the number of centers that fit the "elbow".
+
+```{r scree_plot}
+ggplot(vafs, aes(x=k, y=vaf)) + 
+  geom_point() + geom_line() + 
+  labs(x="Number of Clusters",
+       y="Variance Accounted For",
+       title="Scree Plot of K-Means Clusters on German Credit Data")
+```
+
+It looks to me like three clusters is the appropriate number.
+
+## Model Testing
+
+What does the model with three clusters look like? How does it perform 
+against a holdout sample? Can the clusters be interprereted?
+
+```{r test_model}
+km <- km_list[[2]] # third element is three clusters
+Train$Group = c(km$cluster)
+
+# Variance Accounted For
+vaf <- km$betweenss / km$totss
+(vaf)
+
+# K-Means Centers
+arrange(data.frame(km$centers), Duration)
+```
+
+The model with three clusters is the elbow in the curve on the scree plot. We
+don't want to overfit the data, and with three clusters 
+`r paste0(round(vaf*100,1),"%")` of the variance between clusters is explained.
+
+The centers of the clusters are distinct and far apart. They are describing 
+three different sets of people. The first row has short term, low balance, 
+higher interest loans. The second row is medium term, higher balance, slightly
+lower interest loans. The last row has an average term of less than a year 
+longer than the medium term loans, but the balance is nearly twice that of 
+it's shorter neighbor. The interest rate is lower again.
+
+So the three groups here are:
+  1. Short-term; low-balance; high-interest
+  2. Medium-term; medium-balance; medium-interest
+  3. Long-term; high-balance; low-interest
+
+I would expect the reasons these people took out loans to be very different. 
+The first group might be facing a financial hardship and need a small amount
+of money right now, while the last group is probably looking for car financing 
+or something of the like.
+
+```{r holdout}
+km_hold <- kmeans(Test[,c(1,2,3)], km$centers, nstart=20)
+(varianceAccountedFor(km_hold))
+arrange(data.frame(km_hold$centers), Duration)
+```
+
+Cluster centers in the holdout resemble the training set pretty closely. The 
+installment rate and duration variables match up without any significant 
+movement. The amount centers are off though, especially the second cluster's 
+which is nearly 40% greater in the holdout set. Still, they seems pretty well
+validated.
+
+# K Overlapping Means
+
+```{r komeans functions, echo=FALSE}
+fun.okc.2= function (data = data, nclust = nclust, lnorm = lnorm, tolerance = tolerance) 
+{
+    M = nrow(data)
+    N = ncol(data)
+    K = nclust
+    niterations = 50
+#    datanorm = apply(data, 2, fun.normalize)
+    datanorm = scale(data)
+    S = matrix(sample(c(0, 1), M * K, replace = TRUE), M, K)
+    S = cbind(S, rep(1, M))
+    W = matrix(runif(N * K), K, N)
+    W = rbind(W, rep(0, N))
+    sse = rep(0, niterations)
+    oprevse = exp(70)
+    opercentse = 1
+    i = 1
+    while ((i <= niterations) & (opercentse > tolerance)) {
+        for (k in 1:K) {
+            sminusk = S[, -k]
+            wminusk = W[-k, ]
+            s = as.matrix(S[, k])
+            w = t(as.matrix(W[k, ]))
+            dstar = datanorm - sminusk %*% wminusk
+            prevse = exp(70)
+            percentse = 1
+            l = 1
+            while ((l <= niterations) & (percentse > tolerance)) {
+                for (m in 1:N) {
+                  if (lnorm == 2) {
+                    w[1, m] = mean(dstar[s == 1, m], na.rm = TRUE)
+                  }
+                  if (lnorm == 1) {
+                    w[1, m] = median(dstar[s == 1, m], na.rm = TRUE)
+                  }
+                }
+                for (m in 1:M) {
+                  if (lnorm == 2) {
+                    ss1 = sum((dstar[m, ] - w[1, ])^2, na.rm = TRUE)
+                    ss0 = sum((dstar[m, ])^2, na.rm = TRUE)
+                  }
+                  if (lnorm == 1) {
+                    ss1 = sum(abs(dstar[m, ] - w[1, ]), na.rm = TRUE)
+                    ss0 = sum(abs(dstar[m, ]), na.rm = TRUE)
+                  }
+                  if (ss1 <= ss0) {
+                    s[m, 1] = 1
+                  }
+                  if (ss1 > ss0) {
+                    s[m, 1] = 0
+                  }
+                }
+                if (sum(s) == 0) {
+                  s[sample(1:length(s), 2)] = 1
+                }
+                if (lnorm == 2) {
+                  se = sum((dstar - s %*% w)^2, na.rm = TRUE)
+                }
+                if (lnorm == 1) {
+                  se = sum(abs(dstar - s %*% w), na.rm = TRUE)
+                }
+                percentse = 1 - se/prevse
+                prevse = se
+                l = l + 1
+            }
+            S[, k] = as.vector(s)
+            W[k, ] = as.vector(w)
+        }
+        if (lnorm == 2) 
+            sse[i] = sum((datanorm - S %*% W)^2, na.rm = TRUE)/sum((datanorm - 
+                mean(datanorm, na.rm = TRUE))^2, na.rm = TRUE)
+        if (lnorm == 1) 
+            sse[i] = sum(abs(datanorm - S %*% W), na.rm = TRUE)/sum(abs(datanorm - 
+                median(datanorm, na.rm = TRUE)), na.rm = TRUE)
+        if (lnorm == 2) {
+            ose = sum((datanorm - S %*% W)^2, na.rm = TRUE)
+        }
+        if (lnorm == 1) {
+            ose = sum(abs(datanorm - S %*% W), na.rm = TRUE)
+        }
+        opercentse = (oprevse - ose)/oprevse
+        oprevse = ose
+        i = i + 1
+    }
+    if (lnorm == 2) 
+        vaf = cor(as.vector(datanorm), as.vector(S %*% W), use = "complete.obs")^2
+    if (lnorm == 1) 
+        vaf = 1 - sse[i - 1]
+     rrr = list(Data = data, Normalized.Data = datanorm, Tolerance = tolerance, 
+        Groups = S[, 1:K], Centroids = round(W[1:K, ], 2), SSE.Percent = sse[1:i - 
+            1], VAF = vaf)
+
+
+    return(rrr)
+}
+
+komeans=function (data = data, nclust = nclust, lnorm = lnorm, nloops = nloops, tolerance = tolerance, seed = seed) 
+{
+    prevsse = 100
+    set.seed(seed)
+    for (i in 1:nloops) {
+        z = fun.okc.2(data = data, nclust = nclust, lnorm = lnorm, 
+            tolerance = tolerance)
+        if (z$SSE.Percent[length(z$SSE.Percent[z$SSE.Percent >  0])] < prevsse) {
+            prevsse = z$SSE.Percent[length(z$SSE.Percent[z$SSE.Percent >  0])]
+            ind = i
+            z.old = z
+        }
+    }
+    return(list(data = z.old$Data, Normalized.Data = z.old$Normalized.Data, 
+        Group = z.old$Group %*% as.matrix(2^(0:(nclust-1)) ), Centroids = z.old$Centroids, Tolerance = z.old$Tolerance, 
+        SSE.Pecent = z.old$SSE.Percent, VAF = z.old$VAF, iteration = ind, 
+        seed = seed))
+}
+```
+
+Compute K-overlapping-means using the custom function komeans.
+
+```{r komeans}
+kom_list <- lapply(2:6, function(i) {
+  komeans(Train[,1:3], nclust=i, lnorm=2, nloops=50, tolerance=0.001, seed=123)
+})
+
+kom_vafs <- sapply(kom_list, function(kom) kom$VAF)
+kom_vafs <- data.frame(
+  k=2:6,
+  vaf = kom_vafs)
+
+ggplot(kom_vafs, aes(x=k, y=vaf)) + 
+  geom_point() + geom_line() + 
+  labs(x="Number of Clusters",
+       y="Variance Accounted For",
+       title="Scree Plot of K-Overlapping-Means Clusters on German Credit Data")
+```
+
+It looks like three clusters for ko-means as well.
+
+To compare ko-means to k-means we need to look at the largest n groups from 
+the ko-means solution. In this case we look at the largest three clusters to
+compare against the three clusters from k-means.
+
+```{r compare}
+kom <- kom_list[[2]]
+
+(table(kom$Group))
+
+kom$data$Group <- c(kom$Group)
+
+kom$data %>%
+  filter(Group %in% c(0, 1, 2)) %>%
+  group_by(Group) %>%
+  summarize(Duration = mean(Duration), 
+            Amount = mean(Amount), 
+            InstallmentRatePercentage = mean(InstallmentRatePercentage)) %>%
+  arrange(Duration)
+```
+
+The two algorithms did not come up with similar answers. The groups for 
+ko-means are not just replicas of the groups for kmeans. The komeans clusters
+picked up on the short, and medium durations. But it also chose a cluster
+between short and medium with no real long-term duration cluster of close
+to 40 (presumably months). It's also interesting that the amounts and rates
+don't line up neatly like they do for the kmeans method. Here the amounts do 
+not neatly trend with duration. 
+
+Instead the three clusters are:
+  1. Short-term, low amount, high rate
+  2. Short-term, medium amount, low rate
+  3. Medium-term, medium amount, high rate
+  
+# Summary
+
+For this dataset I find that the k-means algorithm yields a higher explained
+variance and more easily interpretable clusters. The ko-means algorthim leads
+to somewhat confusing and counterintuitive results.
+
+This doesn't mean that ko-means is not a good algorthim. It's chief strength is
+its ability to operate on big datasets. The German Credit dataset is only 1000
+rows. It's tiny data compared to true financial training data for a big bank. 
+Those sets might contain millions of records, and a k-means approach there 
+would be unrealistic.
+
+# Focus Groups
+
+Let's suppose that I was given the task to recruit people for a focus group
+for each of the above segments. How might I go about doing that?
+
+I chose to cluster on credit variables, not people characteristics. I did not
+include age or purpose in the clustering, so knowing which people are going
+to fall into each cluster might be tough. I would probably recruit a broad
+set of people and as they took various loan terms I would identify which 
+cluster they belonged to. 
+
+I would not attempt to recruit people over the telephone, and instead send
+out a promotional mailer or email since I will need to get a broad audience
+in order to fill 30 respondents in each of three segments. Since my cluster is
+based on loan terms (duration of loan, rate of loan, amount of loan) I would
+need to know what kind of loan terms each person is looking for. Therefore I 
+would need a real loan application from a bank or financial service provider.
+I would use existing inbound and outbound marketing channels to identify 
+those I would like to recruit and send them an email inviting them to be a part
+of my study.
