@@ -1,0 +1,148 @@
+---
+title: "Assignment 3 - Part 1"
+subtitle: "Latent Class Analysis"
+author: "Scott Shepard"
+date: "7/8/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In this assignment I am working with the German Credit data and conducint 
+Latent Class Analysis. This type of clustering analysis is used to uncover 
+hidden (latent) variables in a group. 
+
+When loading this data we will split it into a test and train set on the same
+size as in Assignment 2, 632:368 split.
+
+I am using the CSV downloaded version of German Credit instead of the dataset 
+that is in the caret package. This is because the caret package data has all
+the categorical variables as dummy variables while the csv has the full group
+encodings. LCA works best on true categorical and non-dummy variables.
+
+```{r data, results='hide'}
+suppressMessages(library(dplyr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(poLCA))
+
+splitData <- function(data, smp_size) {
+  # Take a dataset and split it randomly into train and test sets
+  # The size of the training set is the smp_size argument
+  train_ind <- sample(seq_len(nrow(data)), size = smp_size)
+  train <- data[ train_ind, ]
+  test  <- data[-train_ind, ]
+  
+  list("train"=train, "test"=test)
+}
+
+path <- "~/Dropbox/MScA/31008 - Data Mining/"
+GC <- read.csv(file.path(path, "GermanCredit.csv"), stringsAsFactors = F)
+GC <- mutate(GC, Purpose = Purpose + 1)
+
+set.seed(123)
+splitted <- splitData(GC, 632)
+Train <- splitted$train
+Test  <- splitted$test
+```
+
+# Latent Class Analysis
+
+The `poLCA` function from the package of the same name can create latent class
+clusters. We are looking for variables with good separation between them to
+create the clusters. 
+
+After a lot of fiddling I found that the variables `Purpose` and `Occupation`
+achieved the best separation. This makes a certain amount of intuitive sense.
+The main differentiators between creditors are 
+
+  1. What are they taking this loan out for?
+  2. How much money do they need?
+
+Since we are only using categorical variables for LCA the best approximator for
+number how much they need is how much they currently make. Occupation is a 
+proxy on how much they currently make.
+
+Now to determine the number of clusters. We do this by building several models
+with different numbers of clusters and then examining the AIC and BIC of each.
+
+Start by trying 2, 3, 4, and 5 clusters.
+
+```{r models}
+fmla <- cbind(Purpose, Occupation)~1
+
+models <- lapply(2:5, function(i) {
+  poLCA(fmla, Train, nclass=i, nrep=10, tol=0.001, verbose=FALSE, graphs=FALSE)
+})
+
+criterion <- plyr::ldply(models, function(m) {
+  data.frame(m[c('bic', 'aic')])
+})
+
+criterion$n_clusters <- 2:5
+```
+
+Now that the models are built, check the AIC and BIC of each.
+
+As you can see, the AIC is minimized with two clusters. The BIC is minimized
+with two clusters. We're going to pick two clusters for our model.
+
+```{r criterion_plot}
+reshape2::melt(criterion, id.vars="n_clusters") %>%
+  ggplot(aes(x=n_clusters, y=value, color=variable)) + 
+  geom_point() + 
+  geom_line() + 
+  labs(y="Information Criterion",
+       x="Number of Clusters",
+       title="Picking N Clusters Using AIC & BIC")
+
+(criterion)
+```
+
+What does this model actually look like? We can plot the model itself to 
+see what the clusters are and start to interpret them.
+
+```{r lca_plot}
+plot(models[[1]])
+```
+
+# Holdout Validation
+
+```{r}
+m2 <- models[[1]]
+holdout <- poLCA(fmla, Test, nclass=2, nrep=10, tol=0.001, verbose=FALSE, 
+                 graphs=TRUE, probs.start = m2$probs)
+```
+
+Yikes. The relative class sizes are wildly different for the training vs. 
+holdout group. The training group has a roughly 80/20 split while the holdout
+group ends up at nearly 50/50. Furthermore, a visual inspection shows that
+the clusters are very different! In the training set cluster two is dominated
+by occupation 4, while in the holdout set cluster 2 has almost no occupation 4
+at all. This changes the interpretability of the clusters completely.
+
+We can print out the probabilities directly to observe.
+
+```{r}
+(m2$probs)
+
+(holdout$probs)
+```
+
+The numbers are all over the place. I'm particularly focused on the occupation
+numbers. In the training sample cluster one has 76% in occupation 3 (skilled 
+employee) while cluster two has 72% in occupation 4 (management). In the 
+holdout group both clusters one and two have 60% in occupation 3. These are
+effectively completely different splits on the data. I chose occupation as a
+variable because I saw great separation in clustering, but if that's not the
+case then what's the point?
+
+# Conclusions
+
+I'm not sure that LCA is an appropriate clustering technique for this dataset.
+I had a hard time finding a combination of variables that achieved both good
+separation and performed well in a holdout analysis. I think LCA would be more
+appropriate with a more disperate population
+
+
