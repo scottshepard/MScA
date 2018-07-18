@@ -1,0 +1,112 @@
+---
+title: "Assignment 3 -- Part 2"
+subtitle: "Principal Component Analysis"
+author: "Scott Shepard"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Step 1: Data
+
+Split the data
+
+```{r split_data}
+suppressMessages(library(caret))
+suppressMessages(library(dplyr))
+suppressMessages(library(ggplot2))
+
+splitData <- function(data, smp_size) {
+  # Take a dataset and split it randomly into train and test sets
+  # The size of the training set is the smp_size argument
+  if(smp_size < 1) {
+    smp_size <- floor(nrow(data) * smp_size)
+  }
+  train_ind <- sample(seq_len(nrow(data)), size = smp_size)
+  train <- data[ train_ind, ]
+  test  <- data[-train_ind, ]
+  
+  list("train"=train, "test"=test)
+}
+
+data("GermanCredit")
+
+set.seed(123)
+GC <- splitData(GermanCredit, 0.7)
+Train <- GC$train
+Test <- GC$test
+```
+
+## Step 2: PCA
+
+Perform principal Component Analysis
+
+```{r pca}
+pca <- prcomp(Train[,1:7], scale.=TRUE)
+```
+
+## Step 3: Scree Plots
+
+Use Scree Plots to Pick Components.
+
+```{r scree_plots}
+df <- data.frame(t(summary(pca)$importance))
+df$n <- 1:nrow(df)
+
+ggplot(df, aes(x=n, y=Standard.deviation^2)) + 
+  geom_bar(stat="identity") + 
+  labs(y="Variances", x="Principal Component", 
+       title="Importance of Scaled Principal Components", 
+       subtitle="Variance plot")
+
+ggplot(df, aes(x=n, y=Cumulative.Proportion)) + 
+  geom_point() + 
+  geom_line() +
+  labs(y="Proportion of Variance Explained", x="Principal Component", 
+       title="Importance of Scaled Principal Components", 
+       subtitle="Cumulative Proportion of Variance Explained")
+```
+
+There is no "elbow" in the cumulative variance curve until the sixth component.
+If PCA only reduces dimensionality by one then the exercise hardly seems 
+worth it. 
+
+The overall variance plot shows that components one and two dominate, and 
+components three, four, and five contribute about the same amount each. 
+But the cumulative variance explained with the frist two components is only 
+44% so I'm reluctant to limit my choice to just those two components.
+
+Instead I'd like to pick a threshold for variance explained. 70% seems like 
+the lowest threshold for a useful analysis. The first four components explain
+73% of the variance so I will use the first four components in my analysis.
+
+# Step 4: Component v. Component
+
+Plot component 1 against each of the others and interpret them.
+
+```{r}
+factors <- pca$x
+loadings <- data.frame(pca$rotation)
+loadings$label <- row.names(loadings)
+
+ggplot(loadings, aes(x=PC1, y=PC2)) + 
+  geom_point() + 
+  geom_text(aes(label=label))
+
+ggplot(loadings, aes(x=PC1, y=PC3)) + 
+  geom_point() + 
+  geom_text(aes(label=label))
+
+ggplot(loadings, aes(x=PC1, y=PC4)) + 
+  geom_point() + 
+  geom_text(aes(label=label))
+```
+
+# Part 5: Orthoganol Loadings
+
+# Part 6: Orthoganol Scores
+
+# Part 7: Holdout Validation
+
