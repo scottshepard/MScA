@@ -38,8 +38,11 @@ splitData <- function(data, smp_size) {
 }
 
 path <- "~/Dropbox/MScA/31008 - Data Mining/"
-GC <- read.csv(file.path(path, "GermanCredit.csv"), stringsAsFactors = F)
-GC <- mutate(GC, Purpose = Purpose + 1)
+GC <- read.csv(file.path(path, "GermanCredit.csv"))
+GC <- mutate(GC, 
+             Occupation = as.numeric(as.factor(Occupation)),
+             Payment.Status.of.Previous.Credit = as.numeric(as.factor(Payment.Status.of.Previous.Credit)),
+             Value.Savings.Stocks = as.factor(as.numeric(Value.Savings.Stocks)))
 
 set.seed(123)
 splitted <- splitData(GC, 632)
@@ -53,16 +56,17 @@ The `poLCA` function from the package of the same name can create latent class
 clusters. We are looking for variables with good separation between them to
 create the clusters. 
 
-After a lot of fiddling I found that the variables `Purpose` and `Occupation`
-achieved the best separation. This makes a certain amount of intuitive sense.
-The main differentiators between creditors are 
+After some help at the review session, I looked for variables that were both
+interpretable and had about the same number of levels. I only looked at
+variables that had about four levels.
 
-  1. What are they taking this loan out for?
-  2. How much money do they need?
+I wanted to find classes that weren't dependent on account balance or credit
+history or other financial markers. I find these classes easier to interpret
+and more insightful. I only looked at non-financial fields.
 
-Since we are only using categorical variables for LCA the best approximator for
-number how much they need is how much they currently make. Occupation is a 
-proxy on how much they currently make.
+After a lot of fiddling I found that the variables `Occupation`, 
+`Housing`, and `Sex/ Marital Status` achieved good separation. All my models
+are built on the these three variables.
 
 Now to determine the number of clusters. We do this by building several models
 with different numbers of clusters and then examining the AIC and BIC of each.
@@ -70,10 +74,10 @@ with different numbers of clusters and then examining the AIC and BIC of each.
 Start by trying 2, 3, 4, and 5 clusters.
 
 ```{r models}
-fmla <- cbind(Purpose, Occupation)~1
+fmla <- cbind(Occupation, Type.of.apartment, Sex...Marital.Status)~1
 
 models <- lapply(2:5, function(i) {
-  poLCA(fmla, Train, nclass=i, nrep=10, tol=0.001, verbose=FALSE, graphs=FALSE)
+  poLCA(fmla, Train, nclass=i, nrep=50, tol=0.001, verbose=FALSE, graphs=FALSE)
 })
 
 criterion <- plyr::ldply(models, function(m) {
@@ -85,8 +89,9 @@ criterion$n_clusters <- 2:5
 
 Now that the models are built, check the AIC and BIC of each.
 
-As you can see, the AIC is minimized with two clusters. The BIC is minimized
-with two clusters. We're going to pick two clusters for our model.
+As you can see, the AIC is minimized with three clusters. The BIC is minimized
+with two clusters, but there's a slight elbow at three clusters. 
+We're going to pick three clusters for our model.
 
 ```{r criterion_plot}
 reshape2::melt(criterion, id.vars="n_clusters") %>%
@@ -104,23 +109,24 @@ What does this model actually look like? We can plot the model itself to
 see what the clusters are and start to interpret them.
 
 ```{r lca_plot}
-plot(models[[1]])
+plot(models[[2]])
 ```
 
 # Holdout Validation
 
 ```{r}
-m2 <- models[[1]]
-holdout <- poLCA(fmla, Test, nclass=2, nrep=10, tol=0.001, verbose=FALSE, 
+m2 <- models[[2]]
+holdout <- poLCA(fmla, Test, nclass=3, nrep=10, tol=0.001, verbose=FALSE, 
                  graphs=TRUE, probs.start = m2$probs)
 ```
 
 Yikes. The relative class sizes are wildly different for the training vs. 
-holdout group. The training group has a roughly 80/20 split while the holdout
-group ends up at nearly 50/50. Furthermore, a visual inspection shows that
-the clusters are very different! In the training set cluster two is dominated
-by occupation 4, while in the holdout set cluster 2 has almost no occupation 4
-at all. This changes the interpretability of the clusters completely.
+holdout group. The training group has a roughly 70/20/10 split while the holdout
+group ends up with much more even classes. 
+
+A visual inspection of the marginal probabilities will reveal that the seem 
+to change from training to holdout. This changes the interpretability of 
+the clusters. Not good.
 
 We can print out the probabilities directly to observe.
 
@@ -130,19 +136,37 @@ We can print out the probabilities directly to observe.
 (holdout$probs)
 ```
 
-The numbers are all over the place. I'm particularly focused on the occupation
-numbers. In the training sample cluster one has 76% in occupation 3 (skilled 
-employee) while cluster two has 72% in occupation 4 (management). In the 
-holdout group both clusters one and two have 60% in occupation 3. These are
-effectively completely different splits on the data. I chose occupation as a
-variable because I saw great separation in clustering, but if that's not the
-case then what's the point?
+Looking at the marginal probabilites directly is a bit more comforting than
+observing them on the plots. The occupation marginals look rougly similar
+in all clusters between train and test, except for class one occupation four.
+
+Most concerning is class two sex and marital status. In train the probabilites
+for rent and own are roughly equal. However in the holdout the own group is 
+nine times as higher than the rent group. That completely changes the
+interpretation of that cluster.
+
+# Interpretation
+
+If the holdout test was successfull (it's not) then the clusters and classes
+could be interpretted. I chose variables that make the interpretation easier.
+
+The first cluster is single men, living for free, and working in 
+mangerial jobs. The second cluster is divorced women either renting or owning, 
+working as skilled or unskilled positions. The last cluser is skilled single 
+men working in skilled postions.
+
+What is the latent class that underpins these classes? It seems to be 
+differentiating between go-getters and moochers. The single men working in 
+managerial roles but living for free rate high on the moocher scale. It's a 
+small group but highly concentrated. The group of divorced women are all being
+bucketed together regardless of living situation or employment. These are the 
+go-getters. The third class is everyone else who falls somewhere in the middle.
 
 # Conclusions
 
 I'm not sure that LCA is an appropriate clustering technique for this dataset.
 I had a hard time finding a combination of variables that achieved both good
 separation and performed well in a holdout analysis. I think LCA would be more
-appropriate with a more disperate population
+appropriate with a more disperate population or with more data.
 
 
