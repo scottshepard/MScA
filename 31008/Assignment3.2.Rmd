@@ -104,9 +104,57 @@ ggplot(loadings, aes(x=PC1, y=PC4)) +
   geom_text(aes(label=label))
 ```
 
+PC1 captures the most variation. This component is dominated by duration
+and amount. So a quarter of the variation of the numeric variables is made up
+by the loan term and size. This means that there are a lot of different kinds
+of credits in the dataset. It's not just short-term loans, but a good mix.
+
+PC2 has no duration or amount, but is instead made up for negative values for
+age, residence, and existing credits. For interpration I don' think that negative
+or positive really matter, just magnitude. They matter later when it comes to
+the transformed variables. Here age and duration dominate. So after the amount
+and duration of a loan, the most important factor in explaining variance is an
+applicant's stability, their age and duration. My guess is customers who are 
+older and have lived in their own home or apartment for a long time are better
+credit risks.
+
+PC3 is dominated by the percentage rate with some negative 
+NumberPeopleMaintenance. I don't understand what that second field means. Is
+it number of dependents? I don't really know. In any case the rate is the most
+importrant variable here. This is another loan indicator. I might have 
+expected this to come as PC2 instead of PC3.
+
+PC4 is a classic rebalancing. It is effectively opposite PC2 from PC3. Where
+PC2 has negative housing and residence duration, and PC3 has postive percentage
+rate, PC4 has postive housing and negative rate. This factor adjusts any 
+overcorrections that happen from PC2 and PC3.
+
 # Part 5: Orthoganol Loadings
 
+Loadings must be orthoganol by definition. We can check that using the dot
+product. Each loading dotted with each other must be zero. We would expect
+the matrix multiplication of the transpose of loadings with itself to give 
+the identity matrix.
+
+I use the `round` function because otherwise the output is unreadable. The
+actual values returned are not exactly zero but are instead within system
+limits for zero. i.e. 1x10^-16
+
+```{r}
+loadings <- pca$rotation
+round(t(loadings) %*% loadings, 12)
+```
+
 # Part 6: Orthoganol Scores
+
+We can check orthogonaliy of the scores by computing the correlation and
+covariance matricies. These should be diagonal matricies.
+
+```{r}
+round(cor(pca$x), 4)
+
+round(cov(pca$x), 4)
+```
 
 # Part 7: Holdout Validation
 
