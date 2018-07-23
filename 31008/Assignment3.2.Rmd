@@ -158,3 +158,75 @@ round(cov(pca$x), 4)
 
 # Part 7: Holdout Validation
 
+To perform holdout validation we must first properly scale the test data.
+The train data was automatically scaled so first we have to compute the scaling
+factors on the train dataset and then apply it to the test dataset.
+
+Once the scaling is done create a manual test set by taking loadings found from
+the training data times factors from the test data.
+
+```{r}
+means <- apply(Train[,1:7], 2, mean)
+sdevs <- apply(Train[,1:7], 2, sd)
+
+Test.Scaled <- t(apply(Test[,1:7], 1, function(row) {(row-means)/sdevs}))
+
+factors_test <- predict(pca, Test.Scaled)
+loadings_test <- pca$rotation
+
+Test.Manual <- factors_test[,1:4] %*% t(loadings_test[,1:4])
+```
+
+# Part 8: Variance Account For in Holdout
+
+```{r}
+(diag(cor(Test.Manual, Test.Scaled)))
+
+(cor(as.vector(Test.Scaled), as.vector(Test.Manual))^2)
+```
+
+The diagnonals of the correlation matrix show the correlation between each
+variable and itself on the manually created holdout data with the real holdout
+data. The diagonals should be very close to one if the transformations properly
+captured the variance of the components. In this case only a few variables 
+were recreated well: rate, residence, and people maintenance. The other
+variables do not have very high correlations.
+
+The percentage of variance account for by the model is low for what we would
+expect for including so many components. I picked enough components to try to 
+account for 70% of the variance among the variables. Therefore I was hoping
+that the R^2 number would be somewhere around 0.70. The actual R^2 is less
+than half that.
+
+# Part 9: Rotate Components
+
+```{r}
+loadings_rot <- varimax(pca$rotation)
+```
+
+# Part 10: Plot Rotated Loadings
+
+```{r}
+loadings_rot_df <- data.frame(loadings_rot$rotmat)
+loadings_rot_df$label <- names(Test)[1:7]
+
+ggplot(loadings_rot_df, aes(x=X1, y=X2)) + 
+  geom_point() + 
+  geom_text(aes(label=label))
+
+ggplot(loadings_rot_df, aes(x=X1, y=X3)) + 
+  geom_point() + 
+  geom_text(aes(label=label))
+
+ggplot(loadings_rot_df, aes(x=X1, y=X4)) + 
+  geom_point() + 
+  geom_text(aes(label=label))
+```
+
+The interpretation of the loadings has changed a lot with the rotation. 
+Now the first component is Duration - People Maintainence. The second component
+is Amount - Credits, and the third component is Rate - Residence Duration.
+The original first component was Duration + Amount so these are still being 
+captured in the first two. I think this might be easier to interpret as there 
+are fewer major variables in each component, but I think the original components
+were just as easy to interpret.
