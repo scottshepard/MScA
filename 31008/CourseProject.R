@@ -31,4 +31,7 @@ echonest <- special_read_csv(file.path(path, "echonest.csv"), n_rows=100, offset
 
 View(head(tracks))
 
+df <- dplyr::inner_join(tracks, echonest, "track_id")
+
+
 # features <- read.csv(file.path(path, "features.csv"), nrows=100)
