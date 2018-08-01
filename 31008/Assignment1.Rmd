@@ -13,6 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(caret)
 data("GermanCredit")
 GC <- GermanCredit
+GC$Amount <- log(GC$Amount)
 ```
 
 I chose to use only the installment rate
