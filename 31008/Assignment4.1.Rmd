@@ -1,6 +1,7 @@
 ---
 title: "Assignment 4 - Part 1"
 author: "Scott Shepard"
+subtitle: "Logistic Regression"
 date: "7/31/2018"
 output: pdf_document
 ---
