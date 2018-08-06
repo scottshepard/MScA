@@ -52,13 +52,26 @@ Train <- splitted$train
 Test  <- splitted$test
 ```
 
+Build a classification tree model using all the variables in the set. The 
+first column is `Creditability` and that is what we will be trying to predict.
+By default if no fields are specified the model function will use all remaining
+columns.
+
 ```{r}
 x = rpart(Train, control=rpart.control(cp=0, minsplit=30, xval=10))
 ```
 
+The full model is very complex with 21 nodes. These nodes and splits are 
+pretty uninterpretable.
+
 ```{r}
 rpart.plot(x)
 ```
+
+We can fix the interpetability problem by pruning the tree. The first step is to find the correct complexity parameter (cp). This is a value that penalizes overall
+fit by adding each node. 
+
+The optimal value can be found by choosing that which minimizes xerror.
 
 ```{r}
 plotcp(x)
@@ -68,9 +81,15 @@ plotcp(x)
 printcp(x)
 ```
 
+Two CP values minimize xerror in this table. I've chose then one that 
+outputs the smaller tree.
+
 ```{r}
-xp = rpart(Creditability ~ ., data=Train, control=rpart.control(cp=0.0150754, minsplit=30, xval=10))
+xp = rpart(Creditability ~ ., data=Train, 
+           control=rpart.control(cp=0.0150754, minsplit=30, xval=10))
 ```
+
+Plot the pruned tree.
 
 ```{r}
 rpart.plot(xp)

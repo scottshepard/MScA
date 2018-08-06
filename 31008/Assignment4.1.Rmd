@@ -46,7 +46,9 @@ splitData <- function(data, smp_size) {
 path <- "~/Dropbox/MScA/31008 - Data Mining/"
 GC <- read.csv(file.path(path, "GermanCredit.csv"))
 
-numeric_vars <- c(
+# Only a few columns are numeric.
+# The remaining fields need to be cast as factors.
+numeric_vars <-c(
   "Duration.of.Credit..month.",
   "Credit.Amount",
   "Instalment.per.cent",
