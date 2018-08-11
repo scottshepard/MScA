@@ -1,0 +1,213 @@
+---
+title: "Assignment 4 - Part 2"
+author: "Scott Shepard"
+subtitle: "Classification Trees"
+date: "7/31/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In part two of this assignment I am using classification trees to predict
+credit risks instead of logistic regression. I'll use the same training and 
+holdout data as in part one, and compare the two methods.
+
+```{r data, results='hide'}
+suppressMessages(library(dplyr))
+suppressMessages(library(ggplot2))
+library(rpart)
+library(rpart.plot)
+
+splitData <- function(data, smp_size) {
+  # Take a dataset and split it randomly into train and test sets
+  # The size of the training set is the smp_size argument
+  train_ind <- sample(seq_len(nrow(data)), size = smp_size)
+  train <- data[ train_ind, ]
+  test  <- data[-train_ind, ]
+  
+  list("train"=train, "test"=test)
+}
+
+path <- "~/Dropbox/MScA/31008 - Data Mining/"
+GC <- read.csv(file.path(path, "GermanCredit.csv"))
+
+numeric_vars <- c(
+  "Duration.of.Credit..month.",
+  "Credit.Amount",
+  "Instalment.per.cent",
+  "Duration.in.Current.address",
+  "Age..years.",
+  "No.of.Credits.at.this.Bank",
+  "No.of.dependents")
+
+for(col in names(GC)[! names(GC) %in% numeric_vars]) {
+  GC[,col] <- as.factor(GC[,col])
+}
+
+set.seed(123)
+splitted <- splitData(GC, 700)
+Train <- splitted$train
+Test  <- splitted$test
+```
+
+Build a classification tree model using all the variables in the set. The 
+first column is `Creditability` and that is what we will be trying to predict.
+By default if no fields are specified the model function will use all remaining
+columns.
+
+```{r}
+x = rpart(Train, control=rpart.control(cp=0, minsplit=30, xval=10))
+```
+
+The full model is very complex with 21 nodes. These nodes and splits are 
+pretty uninterpretable.
+
+```{r}
+rpart.plot(x)
+```
+
+We can fix the interpetability problem by pruning the tree. The first step is to find the correct complexity parameter (cp). This is a value that penalizes overall
+fit by adding each node. 
+
+The optimal value can be found by choosing that which minimizes xerror.
+
+```{r}
+plotcp(x)
+```
+
+```{r}
+printcp(x)
+```
+
+Two CP values minimize xerror in this table. I've chose then one that 
+outputs the smaller tree.
+
+```{r}
+xp = rpart(Creditability ~ ., data=Train, 
+           control=rpart.control(cp=0.0150754, minsplit=30, xval=10))
+```
+
+Plot the pruned tree.
+
+```{r}
+rpart.plot(xp)
+```
+
+The pruned tree is much easier to use and interpret. There are six clusters
+here. We can name each cluster. The variables of interest are
+  - Account balance -- split on low (L) and high (R) balances
+  - Duration of Credit, i.e. loan term -- split on long (L) and short (R), 
+  then again on super super long (L) and medium (R)
+  - Value of Savings & Stocks -- split on none (L) and any (R)
+  - Purpose -- split on new car, education, household appliance and other, yes (L) and no (R)
+  
+If we order the groups 1 to 6 from left to right, number six is the easiet 
+group to explain. These are customers with high account balances. They are 
+predicted to be good credit risks right off the bat. I guess if your account
+balance is high you can pay back a loan regardless of anything else going
+on. 
+
+The next split is on loan term (group 5). Given that you have a low account 
+balance,  you are more likely to pay back if you have a shorter term. 
+This makes sense as you are probably borrowing less money and there is less 
+chance for something to go wrong in your life. 
+
+The next group (4) is the value of people's savings bonds and stocks. If your 
+account balance is low and you are borrowing for more than a year, it helps
+if you have a nest egg stashed somewhere.
+
+If you have no nest egg then you had better not be borrowing money for 
+a new car, education, a household appliance, or some other purpose. Given that
+you have no checking, savings, and want the money for more than a year. How
+will you pay this back? These people are bad credit risks and fall in group 1.
+
+The final split between groups 2 and 3 is on duration again. If you are 
+borrowing money for a used car with no savings, checking, and for more
+than a year, you should pay it back within 44 months. Group 2 are your 
+super long term buyers and they are bad credit risks. But those with no money
+or savings can be redeemed if they are borrowing for less than 44 months 
+with a loan purpose of 1, 2, 3, 5, 8 or 9. I don't know what to call this group.
+
+There aren't that many groups and they make some intuitive sense.
+
+## Confusion Matrix
+
+```{r}
+pv <- predict(xp, type="class")
+
+tbl <- table(Train$Creditability, pv)
+
+(tbl)
+
+round(prop.table(tbl), 2)
+
+accuracy <- round(100*(tbl[1,1] + tbl[2,2])/sum(tbl))
+(accuracy)
+
+default_rate <- round(100*tbl[1,2]/sum(tbl[,2]))
+(default_rate)
+```
+
+The predictions on the training data are worse than the logistic regression
+model found. The accuracy is higher but the default rate is much worse.
+
+There is an option to use the probability output from the tree and use a 
+cutoff threshold instead.
+
+```{r}
+pv <- predict(xp, type="prob")[,2]
+
+pv[pv >= 0.8] = 1
+pv[pv <  0.8] = 0
+
+tbl <- table(Train$Creditability, pv)
+
+(tbl)
+
+round(prop.table(tbl), 2)
+
+(round(100*(tbl[1,1] + tbl[2,2])/sum(tbl)))
+
+(round(100*tbl[1,2]/sum(tbl[,2])))
+```
+
+This prediction model has a worse accuracy _and_ a worse default rate. Before
+the holdout validation the classification model performs worse than logistic.
+
+# Holdout
+
+Time to evaluate the model on the holdout sample!
+
+```{r}
+pd <- predict(xp, newdata = Test, type="class")
+tbl <- table(Test$Creditability, pd)
+round(prop.table(tbl), 2)
+(round(100*(tbl[1,1] + tbl[2,2])/sum(tbl)))
+(round(100*tbl[1,2]/sum(tbl[,2])))
+```
+
+The output from the holdout sample with the typical class prediction produces
+a 70% accuracy and a 29% default rate. The accuracy is about the same as the 
+logistic regression holdout accuracy but the defaut rate is nearly triple. 
+A default rate that high will surely lose money for the bank.
+
+We can look at using a probability cutoff instead. This got better results
+on the training data.
+
+```{r}
+pd <- predict(xp, newdata = Test, type="prob")[,2]
+pd[pd >= 0.8] = 1
+pd[pd <  0.8] = 0
+tbl <- table(Test$Creditability, pd)
+round(prop.table(tbl), 2)
+(round(100*(tbl[1,1] + tbl[2,2])/sum(tbl)))
+(round(100*tbl[1,2]/sum(tbl[,2])))
+```
+
+The accuracy is similar to the class predictions but the defaut rate is 
+much lower. However 17% is still much too high of a default rate for lending.
+The logistic model holdout rate was only 11%. For predicting good vs bad 
+credit risks I would go with logistic regression over classification for
+this dataset.
