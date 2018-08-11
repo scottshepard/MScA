@@ -25,13 +25,34 @@ special_read_csv <- function(file_path, n_rows=-1, offset=0) {
   df
 }
 
+splitData <- function(data, smp_size) {
+  # Take a dataset and split it randomly into train and test sets
+  # The size of the training set is the smp_size argument
+  train_ind <- sample(seq_len(nrow(data)), size = smp_size)
+  train <- data[ train_ind, ]
+  test  <- data[-train_ind, ]
+  
+  list("train"=train, "test"=test)
+}
+
 genres <- read.csv(file.path(path, "genres.csv"))
-tracks <- special_read_csv(file.path(path, "tracks.csv"), n_rows=100)
-echonest <- special_read_csv(file.path(path, "echonest.csv"), n_rows=100, offset=1)
+tracks <- special_read_csv(file.path(path, "tracks.csv"), n_rows=10000)
+echonest <- special_read_csv(file.path(path, "echonest.csv"), n_rows=10000, offset=1)[,1:26]
 
 View(head(tracks))
 
+ggplot(tracks, aes(x=track_genre_top)) + 
+  geom_bar(stat='count') +
+  theme(axis.text.x = element_text(angle=90))
+
 df <- dplyr::inner_join(tracks, echonest, "track_id")
+set.seed(123)
+l <- splitData(df, round(nrow(df) * 0.7))
+df <- l$train
+
+rpart(iter)
+
+# df <- dplyr::inner_join(tracks, echonest, "track_id")
 
 
 # features <- read.csv(file.path(path, "features.csv"), nrows=100)
