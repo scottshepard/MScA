@@ -1,0 +1,223 @@
+---
+title: "Assignment 4 - Part 1"
+author: "Scott Shepard"
+subtitle: "Logistic Regression"
+date: "7/31/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In this assignment I am building a logistic regression model to predict 
+credit worthiness of applicants being offered various credit terms from a bank.
+The data comes from the `caret` package although here it is in a csv format
+that is easier to read in.
+
+The response variable is called `Creditability` and is a 1 or 0 depending on 
+if that applicant is a good or bad credit risk with the given terms. The job
+of a logistic model is to use the other numeric and categorical variables 
+to make predictions on if that applicant is credit worthy, then evaluate
+the effectivness of the model.
+
+# Data
+
+Fetch the data, split the data into training and test samples (70/30).
+
+```{r data, results='hide'}
+suppressMessages(library(caret))
+suppressMessages(library(AUC))
+suppressMessages(library(dplyr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(poLCA))
+library(gains)
+
+splitData <- function(data, smp_size) {
+  # Take a dataset and split it randomly into train and test sets
+  # The size of the training set is the smp_size argument
+  train_ind <- sample(seq_len(nrow(data)), size = smp_size)
+  train <- data[ train_ind, ]
+  test  <- data[-train_ind, ]
+  
+  list("train"=train, "test"=test)
+}
+
+path <- "~/Dropbox/MScA/31008 - Data Mining/"
+GC <- read.csv(file.path(path, "GermanCredit.csv"))
+
+# Only a few columns are numeric.
+# The remaining fields need to be cast as factors.
+numeric_vars <-c(
+  "Duration.of.Credit..month.",
+  "Credit.Amount",
+  "Instalment.per.cent",
+  "Duration.in.Current.address",
+  "Age..years.",
+  "No.of.Credits.at.this.Bank",
+  "No.of.dependents")
+
+for(col in names(GC)[! names(GC) %in% numeric_vars]) {
+  GC[,col] <- as.factor(GC[,col])
+}
+
+set.seed(123)
+splitted <- splitData(GC, 700)
+Train <- splitted$train
+Test  <- splitted$test
+```
+
+# Model Building
+
+To find the "best" model one approach is to start with a logistic model that 
+includes all varibles and then use a step-wise function to subtract or add 
+variables and measure the AIC. The R function `step` does this. 
+
+I'm not printing the full output of the `step` function because it's several
+pages of model generation.
+
+```{r, results='hide'}
+logit_full <- glm(Creditability~.,data=Train, family=binomial(link=logit))
+
+stepped <- step(logit_full, direction="both")
+```
+
+The final model from `step`:
+
+```{r}
+(stepped$call)
+```
+
+Lowest AIC found using step
+
+```{r}
+(stepped$aic)
+```
+
+Rebuild the optimized model using the output from `step`
+
+```{r}
+logit_opt <- glm(formula = Creditability ~ Account.Balance + 
+                   Duration.of.Credit..month. + 
+                   Payment.Status.of.Previous.Credit + Purpose + Credit.Amount +
+                   Value.Savings.Stocks + Instalment.per.cent + 
+                   Sex...Marital.Status + Guarantors + Type.of.apartment +
+                   No.of.dependents + Telephone + Foreign.Worker, 
+                 family = binomial(link = logit), data = Train)
+```
+
+Generate the confusion matrix on training data. The big question at this stage
+is what to pick for the threshold value. The output of the model is a
+probability of being a good credit risk. What is the cutoff between good and 
+bad risk we want to make?
+
+Choosing a good cutoff involves some unit economics of the credit industry. I
+happen to work for a business that issues loans, so I will make some basic
+assumptions that led to my picking the cutoff of 80%. Preventing bad loans 
+from being isssued is more important that issuing good ones. On a good credit
+risk you might make back 20% of the principal after cost of debt, marketing
+costs, and servicing costs. For a bad loan you lose the entire principal. So 
+you need vastly more good loans than bad ones just to make up the difference.
+
+I picked 80% as a threshold after looking at the confusion matrix. I wanted 
+to keep my default rate under 10% so I could still make a 10% profit. You 
+do that by taking the issued credits (predicted 1s) as the demoninator and the 
+bad credits (actual 0s within that column) as the numerator. That number is 
+the default rate as should be below 10%. The 10% number is somewhat arbitrary.
+Depending on the company and interest rates offered you could pick a different
+target. The default rate for mortgages is much lower and for payday is much 
+higher.
+
+```{r}
+xp = logit_opt$fitted.values
+
+xp[xp >= 0.8] = 1
+xp[xp <  0.8] = 0
+
+tbl <- table(Train$Creditability, xp)
+(tbl)
+(round(prop.table(tbl), 2))
+
+tbl[1,2]/sum(tbl[,2])
+```
+
+The default rate on the training data with the 80% threshold for credit 
+issuance is 9%. That gives us some breathing room for testing the holdout sample.
+
+# Holdout Evaluation
+
+Holdout validation is crucial to determine model performance. We do this 
+by generating predictions on the holdout sample using the optimized logistic.  
+There are several tests to perform on the holdout sample. We want to generate
+the confusion matrix and calculate the default rate, as well as lift charts
+and finally the AUROC Curve.
+
+## Confusion Matrix
+
+```{r}
+pv <- predict(logit_opt, newdata=Test, type="response")
+
+pv[pv >= 0.8] = 1
+pv[pv <  0.8] = 0
+
+tbl <- table(Test$Creditability, pv)
+(tbl)
+(round(prop.table(tbl), 2))
+
+accuracy <- round(100*(tbl[1,1] + tbl[2,2])/300)
+(accuracy)
+default_rate <- round(100*tbl[1,2]/sum(tbl[,2]))
+(default_rate)
+```
+
+The model correctly classified `r accuracy`% of the holdout sample, which is 
+okay but not great. However we are more interested in the default rate, which
+is the misclassification of bad credits as good (loans that would have been 
+issued and defaulted). This is `r default_rate`% which is pretty close to the
+9% number generated from the training dataset. The 2% difference would make
+an impact on our bottom line but not too terrible with training dataset of
+only 1000 credits. I'm reasonably happy with these numbers.
+
+## Lift Charts
+
+
+
+```{r}
+pv <- predict(logit_opt, newdata=Test, type="response")
+gains(as.numeric(Test$Creditability)-1, as.numeric(pv), 10)
+```
+
+```{r}
+plot.gains(gains(as.numeric(Test$Creditability)-1, pv, 10))
+```
+
+The gains table and plot show that most of the correct responses are clustered
+in the top deciles. There are a lot of correct responses in the file, about 
+70% of the data are 1s. Over the correct responses are accounted for in the 
+first 4 deciles or 40% of the data. That's pretty good.
+
+The predicted mean response tracks very well with mean response except in 
+the 6th decile. I'm not sure what is happening there. I suppose this means
+that the predicted score is 0.75 but the actual score is 0.47. This is good 
+evidence for choosing the cutoff at 0.8 since there are apparently a lot of 
+scores in the 0.7-0.8 range that are dead wrong.
+
+## AUROC Curve
+
+```{r}
+plot(roc(pv, Test$Creditability))
+title(paste("AUC:",round(auc(roc(pv, Test$Creditability)),3)))
+```
+
+An AUC of about 0.8 is a pretty good model. I'm satisfied with the model 
+outputs.
+
+# Summary
+
+This model is built in 13 variables. Some are related to the credit itself, 
+but many others are characteristics of the applicant. This means that different
+people will behave differently when offered the same credit terms. 
+
+I am reasonably satisfied with the output of the model. An AUC of 0.8 seems 
+pretty high and I found the model resiliant to choosing different prediction
+cutoff thresholds. 

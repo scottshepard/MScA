@@ -1,0 +1,232 @@
+---
+title: "Assignment 3 -- Part 2"
+subtitle: "Principal Component Analysis"
+author: "Scott Shepard"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Step 1: Data
+
+Split the data
+
+```{r split_data}
+suppressMessages(library(caret))
+suppressMessages(library(dplyr))
+suppressMessages(library(ggplot2))
+
+splitData <- function(data, smp_size) {
+  # Take a dataset and split it randomly into train and test sets
+  # The size of the training set is the smp_size argument
+  if(smp_size < 1) {
+    smp_size <- floor(nrow(data) * smp_size)
+  }
+  train_ind <- sample(seq_len(nrow(data)), size = smp_size)
+  train <- data[ train_ind, ]
+  test  <- data[-train_ind, ]
+  
+  list("train"=train, "test"=test)
+}
+
+data("GermanCredit")
+
+set.seed(123)
+GC <- splitData(GermanCredit, 0.7)
+Train <- GC$train
+Test <- GC$test
+```
+
+## Step 2: PCA
+
+Perform principal Component Analysis
+
+```{r pca}
+pca <- prcomp(Train[,1:7], scale.=TRUE)
+```
+
+## Step 3: Scree Plots
+
+Use Scree Plots to Pick Components.
+
+```{r scree_plots}
+df <- data.frame(t(summary(pca)$importance))
+df$n <- 1:nrow(df)
+
+ggplot(df, aes(x=n, y=Standard.deviation^2)) + 
+  geom_bar(stat="identity") + 
+  labs(y="Variances", x="Principal Component", 
+       title="Importance of Scaled Principal Components", 
+       subtitle="Variance plot")
+
+ggplot(df, aes(x=n, y=Cumulative.Proportion)) + 
+  geom_point() + 
+  geom_line() +
+  labs(y="Proportion of Variance Explained", x="Principal Component", 
+       title="Importance of Scaled Principal Components", 
+       subtitle="Cumulative Proportion of Variance Explained")
+```
+
+There is no "elbow" in the cumulative variance curve until the sixth component.
+If PCA only reduces dimensionality by one then the exercise hardly seems 
+worth it. 
+
+The overall variance plot shows that components one and two dominate, and 
+components three, four, and five contribute about the same amount each. 
+But the cumulative variance explained with the frist two components is only 
+44% so I'm reluctant to limit my choice to just those two components.
+
+Instead I'd like to pick a threshold for variance explained. 70% seems like 
+the lowest threshold for a useful analysis. The first four components explain
+73% of the variance so I will use the first four components in my analysis.
+
+# Step 4: Component v. Component
+
+Plot component 1 against each of the others and interpret them.
+
+```{r}
+factors <- pca$x
+loadings <- data.frame(pca$rotation)
+loadings$label <- row.names(loadings)
+
+ggplot(loadings, aes(x=PC1, y=PC2)) + 
+  geom_point() + 
+  geom_text(aes(label=label))
+
+ggplot(loadings, aes(x=PC1, y=PC3)) + 
+  geom_point() + 
+  geom_text(aes(label=label))
+
+ggplot(loadings, aes(x=PC1, y=PC4)) + 
+  geom_point() + 
+  geom_text(aes(label=label))
+```
+
+PC1 captures the most variation. This component is dominated by duration
+and amount. So a quarter of the variation of the numeric variables is made up
+by the loan term and size. This means that there are a lot of different kinds
+of credits in the dataset. It's not just short-term loans, but a good mix.
+
+PC2 has no duration or amount, but is instead made up for negative values for
+age, residence, and existing credits. For interpration I don' think that negative
+or positive really matter, just magnitude. They matter later when it comes to
+the transformed variables. Here age and duration dominate. So after the amount
+and duration of a loan, the most important factor in explaining variance is an
+applicant's stability, their age and duration. My guess is customers who are 
+older and have lived in their own home or apartment for a long time are better
+credit risks.
+
+PC3 is dominated by the percentage rate with some negative 
+NumberPeopleMaintenance. I don't understand what that second field means. Is
+it number of dependents? I don't really know. In any case the rate is the most
+importrant variable here. This is another loan indicator. I might have 
+expected this to come as PC2 instead of PC3.
+
+PC4 is a classic rebalancing. It is effectively opposite PC2 from PC3. Where
+PC2 has negative housing and residence duration, and PC3 has postive percentage
+rate, PC4 has postive housing and negative rate. This factor adjusts any 
+overcorrections that happen from PC2 and PC3.
+
+# Part 5: Orthoganol Loadings
+
+Loadings must be orthoganol by definition. We can check that using the dot
+product. Each loading dotted with each other must be zero. We would expect
+the matrix multiplication of the transpose of loadings with itself to give 
+the identity matrix.
+
+I use the `round` function because otherwise the output is unreadable. The
+actual values returned are not exactly zero but are instead within system
+limits for zero. i.e. 1x10^-16
+
+```{r}
+loadings <- pca$rotation
+round(t(loadings) %*% loadings, 12)
+```
+
+# Part 6: Orthoganol Scores
+
+We can check orthogonaliy of the scores by computing the correlation and
+covariance matricies. These should be diagonal matricies.
+
+```{r}
+round(cor(pca$x), 4)
+
+round(cov(pca$x), 4)
+```
+
+# Part 7: Holdout Validation
+
+To perform holdout validation we must first properly scale the test data.
+The train data was automatically scaled so first we have to compute the scaling
+factors on the train dataset and then apply it to the test dataset.
+
+Once the scaling is done create a manual test set by taking loadings found from
+the training data times factors from the test data.
+
+```{r}
+means <- apply(Train[,1:7], 2, mean)
+sdevs <- apply(Train[,1:7], 2, sd)
+
+Test.Scaled <- t(apply(Test[,1:7], 1, function(row) {(row-means)/sdevs}))
+
+factors_test <- predict(pca, Test.Scaled)
+loadings_test <- pca$rotation
+
+Test.Manual <- factors_test[,1:4] %*% t(loadings_test[,1:4])
+```
+
+# Part 8: Variance Account For in Holdout
+
+```{r}
+(diag(cor(Test.Manual, Test.Scaled)))
+
+(cor(as.vector(Test.Scaled), as.vector(Test.Manual))^2)
+```
+
+The diagnonals of the correlation matrix show the correlation between each
+variable and itself on the manually created holdout data with the real holdout
+data. The diagonals should be very close to one if the transformations properly
+captured the variance of the components. In this case only a few variables 
+were recreated well: rate, residence, and people maintenance. The other
+variables do not have very high correlations.
+
+The percentage of variance account for by the model is low for what we would
+expect for including so many components. I picked enough components to try to 
+account for 70% of the variance among the variables. Therefore I was hoping
+that the R^2 number would be somewhere around 0.70. The actual R^2 is less
+than half that.
+
+# Part 9: Rotate Components
+
+```{r}
+loadings_rot <- varimax(pca$rotation)
+```
+
+# Part 10: Plot Rotated Loadings
+
+```{r}
+loadings_rot_df <- data.frame(loadings_rot$rotmat)
+loadings_rot_df$label <- names(Test)[1:7]
+
+ggplot(loadings_rot_df, aes(x=X1, y=X2)) + 
+  geom_point() + 
+  geom_text(aes(label=label))
+
+ggplot(loadings_rot_df, aes(x=X1, y=X3)) + 
+  geom_point() + 
+  geom_text(aes(label=label))
+
+ggplot(loadings_rot_df, aes(x=X1, y=X4)) + 
+  geom_point() + 
+  geom_text(aes(label=label))
+```
+
+The interpretation of the loadings has changed a lot with the rotation. 
+Now the first component is Duration - People Maintainence. The second component
+is Amount - Credits, and the third component is Rate - Residence Duration.
+The original first component was Duration + Amount so these are still being 
+captured in the first two. I think this might be easier to interpret as there 
+are fewer major variables in each component, but I think the original components
+were just as easy to interpret.

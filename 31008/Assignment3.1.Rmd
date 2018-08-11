@@ -1,0 +1,172 @@
+---
+title: "Assignment 3 - Part 1"
+subtitle: "Latent Class Analysis"
+author: "Scott Shepard"
+date: "7/8/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In this assignment I am working with the German Credit data and conducint 
+Latent Class Analysis. This type of clustering analysis is used to uncover 
+hidden (latent) variables in a group. 
+
+When loading this data we will split it into a test and train set on the same
+size as in Assignment 2, 632:368 split.
+
+I am using the CSV downloaded version of German Credit instead of the dataset 
+that is in the caret package. This is because the caret package data has all
+the categorical variables as dummy variables while the csv has the full group
+encodings. LCA works best on true categorical and non-dummy variables.
+
+```{r data, results='hide'}
+suppressMessages(library(dplyr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(poLCA))
+
+splitData <- function(data, smp_size) {
+  # Take a dataset and split it randomly into train and test sets
+  # The size of the training set is the smp_size argument
+  train_ind <- sample(seq_len(nrow(data)), size = smp_size)
+  train <- data[ train_ind, ]
+  test  <- data[-train_ind, ]
+  
+  list("train"=train, "test"=test)
+}
+
+path <- "~/Dropbox/MScA/31008 - Data Mining/"
+GC <- read.csv(file.path(path, "GermanCredit.csv"))
+GC <- mutate(GC, 
+             Occupation = as.numeric(as.factor(Occupation)),
+             Payment.Status.of.Previous.Credit = as.numeric(as.factor(Payment.Status.of.Previous.Credit)),
+             Value.Savings.Stocks = as.factor(as.numeric(Value.Savings.Stocks)))
+
+set.seed(123)
+splitted <- splitData(GC, 632)
+Train <- splitted$train
+Test  <- splitted$test
+```
+
+# Latent Class Analysis
+
+The `poLCA` function from the package of the same name can create latent class
+clusters. We are looking for variables with good separation between them to
+create the clusters. 
+
+After some help at the review session, I looked for variables that were both
+interpretable and had about the same number of levels. I only looked at
+variables that had about four levels.
+
+I wanted to find classes that weren't dependent on account balance or credit
+history or other financial markers. I find these classes easier to interpret
+and more insightful. I only looked at non-financial fields.
+
+After a lot of fiddling I found that the variables `Occupation`, 
+`Housing`, and `Sex/ Marital Status` achieved good separation. All my models
+are built on the these three variables.
+
+Now to determine the number of clusters. We do this by building several models
+with different numbers of clusters and then examining the AIC and BIC of each.
+
+Start by trying 2, 3, 4, and 5 clusters.
+
+```{r models}
+fmla <- cbind(Occupation, Type.of.apartment, Sex...Marital.Status)~1
+
+models <- lapply(2:5, function(i) {
+  poLCA(fmla, Train, nclass=i, nrep=50, tol=0.001, verbose=FALSE, graphs=FALSE)
+})
+
+criterion <- plyr::ldply(models, function(m) {
+  data.frame(m[c('bic', 'aic')])
+})
+
+criterion$n_clusters <- 2:5
+```
+
+Now that the models are built, check the AIC and BIC of each.
+
+As you can see, the AIC is minimized with three clusters. The BIC is minimized
+with two clusters, but there's a slight elbow at three clusters. 
+We're going to pick three clusters for our model.
+
+```{r criterion_plot}
+reshape2::melt(criterion, id.vars="n_clusters") %>%
+  ggplot(aes(x=n_clusters, y=value, color=variable)) + 
+  geom_point() + 
+  geom_line() + 
+  labs(y="Information Criterion",
+       x="Number of Clusters",
+       title="Picking N Clusters Using AIC & BIC")
+
+(criterion)
+```
+
+What does this model actually look like? We can plot the model itself to 
+see what the clusters are and start to interpret them.
+
+```{r lca_plot}
+plot(models[[2]])
+```
+
+# Holdout Validation
+
+```{r}
+m2 <- models[[2]]
+holdout <- poLCA(fmla, Test, nclass=3, nrep=10, tol=0.001, verbose=FALSE, 
+                 graphs=TRUE, probs.start = m2$probs)
+```
+
+Yikes. The relative class sizes are wildly different for the training vs. 
+holdout group. The training group has a roughly 70/20/10 split while the holdout
+group ends up with much more even classes. 
+
+A visual inspection of the marginal probabilities will reveal that the seem 
+to change from training to holdout. This changes the interpretability of 
+the clusters. Not good.
+
+We can print out the probabilities directly to observe.
+
+```{r}
+(m2$probs)
+
+(holdout$probs)
+```
+
+Looking at the marginal probabilites directly is a bit more comforting than
+observing them on the plots. The occupation marginals look rougly similar
+in all clusters between train and test, except for class one occupation four.
+
+Most concerning is class two sex and marital status. In train the probabilites
+for rent and own are roughly equal. However in the holdout the own group is 
+nine times as higher than the rent group. That completely changes the
+interpretation of that cluster.
+
+# Interpretation
+
+If the holdout test was successfull (it's not) then the clusters and classes
+could be interpretted. I chose variables that make the interpretation easier.
+
+The first cluster is single men, living for free, and working in 
+mangerial jobs. The second cluster is divorced women either renting or owning, 
+working as skilled or unskilled positions. The last cluser is skilled single 
+men working in skilled postions.
+
+What is the latent class that underpins these classes? It seems to be 
+differentiating between go-getters and moochers. The single men working in 
+managerial roles but living for free rate high on the moocher scale. It's a 
+small group but highly concentrated. The group of divorced women are all being
+bucketed together regardless of living situation or employment. These are the 
+go-getters. The third class is everyone else who falls somewhere in the middle.
+
+# Conclusions
+
+I'm not sure that LCA is an appropriate clustering technique for this dataset.
+I had a hard time finding a combination of variables that achieved both good
+separation and performed well in a holdout analysis. I think LCA would be more
+appropriate with a more disperate population or with more data.
+
+
