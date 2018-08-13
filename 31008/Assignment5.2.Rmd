@@ -1,0 +1,50 @@
+---
+title: "Assignment5.2"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(MASS)
+
+splitData <- function(data, smp_size) {
+  # Take a dataset and split it randomly into train and test sets
+  # The size of the training set is the smp_size argument
+  train_ind <- sample(seq_len(nrow(data)), size = smp_size)
+  train <- data[ train_ind, ]
+  test  <- data[-train_ind, ]
+  
+  list("train"=train, "test"=test)
+}
+
+path <- "~/Dropbox/MScA/31008 - Data Mining/"
+GC <- read.csv(file.path(path, "GermanCredit.csv"))
+
+numeric_vars <- c(
+  "Duration.of.Credit..month.",
+  "Credit.Amount",
+  "Instalment.per.cent",
+  "Duration.in.Current.address",
+  "Age..years.",
+  "No.of.Credits.at.this.Bank",
+  "No.of.dependents")
+
+for(col in names(GC)[! names(GC) %in% numeric_vars]) {
+  GC[,col] <- as.factor(GC[,col])
+}
+
+set.seed(123)
+splitted <- splitData(GC, 700)
+Train <- splitted$train
+Test  <- splitted$test
+```
+
+
+```{r}
+lda.1 <- lda(class ~ ., Train)
+```
