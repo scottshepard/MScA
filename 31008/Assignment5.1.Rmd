@@ -1,0 +1,135 @@
+---
+title: "Assignment5.1"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(caret)
+library(dplyr)
+library(ggplot2)
+
+splitData <- function(data, smp_size) {
+  # Take a dataset and split it randomly into train and test sets
+  # The size of the training set is the smp_size argument
+  train_ind <- sample(seq_len(nrow(data)), size = smp_size)
+  train <- data[ train_ind, ]
+  test  <- data[-train_ind, ]
+  
+  list("train"=train, "test"=test)
+}
+
+data("GermanCredit")
+
+set.seed(123)
+splitted <- splitData(GermanCredit, 700)
+Train <- splitted$train
+Test  <- splitted$test
+```
+
+```{r clustereg}
+clustreg=function(dat,k,tries,sed,niter) {
+
+set.seed(sed)
+dat=as.data.frame(dat)
+rsq=rep(NA,niter)
+res=list()
+rsq.best=0
+    for(l in 1:tries) {
+
+	c = sample(1:k,nrow(dat),replace=TRUE)
+	yhat=rep(NA,nrow(dat))
+	for(i in 1:niter) {		
+		resid=pred=matrix(0,nrow(dat),k)
+		for(j in 1:k){	
+			pred[,j]=predict(glm(dat[c==j,],family="gaussian"),newdata=dat)		
+			resid[,j] = (pred[,j]-dat[,1])^2
+		}
+
+	c = apply(resid,1,fun.index.rowmin)
+	for(m in 1:nrow(dat)) {yhat[m]=pred[m,c[m]]}
+	rsq[i] = cor(dat[,1],yhat)^2	
+	#print(rsq[i])
+	}
+	
+	if(rsq[niter] > rsq.best) {	
+		rsq.best=rsq[niter]
+		l.best=l
+            c.best=c
+		yhat.best=yhat
+		}
+    }
+
+    for(i in k:1) res[[i]]=summary(lm(dat[c.best==i,]))
+	
+return(list(data=dat,nclust=k,tries=tries,seed=sed,rsq.best=rsq.best,number.loops=niter, Best.try=l.best,cluster=c.best,results=res))
+}
+
+fun.index.rowmin=function(x) {
+    
+    z=(1:length(x)) [x == min(x)]
+    if(length(z) > 1) { z=sample(z,1)}
+    return ( z ) 
+}
+
+clustreg.predict=function(results,newdat){
+
+	yhat=rep(NA,nrow(newdat))
+	resid=pred=matrix(0,nrow(newdat),length(table(results$cluster)))
+		
+		for(j in 1:length(table(results$cluster))){			
+			pred[,j]=predict(glm(results$data[results$cluster==j,],family="gaussian"),newdata=newdat)		
+			resid[,j] = (pred[,j]-newdat[,1])^2
+		}
+
+	c = apply(resid,1,fun.index.rowmin)
+	for(m in 1:nrow(newdat)) {yhat[m]=pred[m,c[m]]}
+	rsq = cor(newdat[,1],yhat)^2	
+
+return(list(results=results,newdata=newdat,cluster=c,yhat=yhat,rsq=rsq))
+
+}
+```
+
+```{r}
+clustreg.1=clustreg(Train[,c(2,1,3:7)],1,1,123,1)
+clustreg.2=clustreg(Train[,c(2,1,3:7)],2,12,123,10)
+clustreg.3=clustreg(Train[,c(2,1,3:7)],3,19,123,10)
+```
+
+```{r}
+data.frame(
+  nclust=1:3, 
+  rsq = sapply(list(clustreg.1, clustreg.2, clustreg.3), 
+               function(cl) cl$rsq.best)) %>%
+  ggplot(aes(x=nclust, y=rsq)) + 
+  geom_bar(stat="identity") +
+  geom_text(aes(label=paste0(round(rsq*100,1),"%")), vjust=1.5, color="white") + 
+  labs(x="Number of Clusters",
+       y="Best R^2",
+       title="Clusterwise Regression Performance",
+       subtitle="The more clusters the better! (up to 3)")
+```
+
+```{r}
+pv.1 <- clustreg.predict(clustreg.1, Test[,c(2,1,3:7)])
+pv.2 <- clustreg.predict(clustreg.2, Test[,c(2,1,3:7)])
+pv.3 <- clustreg.predict(clustreg.3, Test[,c(2,1,3:7)])
+```
+
+
+```{r}
+data.frame(
+  nclust=1:3, 
+  rsq = sapply(list(pv.1, pv.2, pv.3), 
+               function(cl) cl$rsq)) %>%
+  ggplot(aes(x=nclust, y=rsq)) + 
+  geom_bar(stat="identity") +
+  geom_text(aes(label=paste0(round(rsq*100,1),"%")), vjust=1.5, color="white") + 
+  labs(x="Number of Clusters",
+       y="Best R^2",
+       title="Holdout Validation R^2")
+```
