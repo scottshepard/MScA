@@ -1,16 +1,28 @@
 ---
 title: "Assignment5.1"
 output: pdf_document
+subtitle: "Clusterwise Regression"
+author: "Scott Shepard"
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
-library(caret)
-library(dplyr)
-library(ggplot2)
+This this assignment I explore the method of clusterwise regression on the 
+German Credit dataset. Custerwise regression is a method to simulaneously 
+discover latent classes and increase the fit of a regression model, in this
+case a linear one. It can do this by first randomly assigning clusters to
+a dataset, performing a regression analysis, then iterating by flipping each
+point and seeing if the regression gets better or worse. It is validated 
+through standand holdout validation.
+
+## 1. Prep the Data
+
+```{r, results='hide'}
+suppressMessages(library(dplyr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(caret))
 
 splitData <- function(data, smp_size) {
   # Take a dataset and split it randomly into train and test sets
@@ -24,48 +36,69 @@ splitData <- function(data, smp_size) {
 
 data("GermanCredit")
 
+# The caret package dataset's first seven variables are numeric.
+# The "Amount" variable is in the second column and must be placed in the 
+# first position for the clustreg function.
+GC <- GermanCredit[,c(2,1,3:7)]
+
 set.seed(123)
-splitted <- splitData(GermanCredit, 700)
+splitted <- splitData(GC, 700)
 Train <- splitted$train
 Test  <- splitted$test
 ```
 
+## 2. Function Definitions
+
+The clusterwise regression and prediction functions come from Anil Chaturvedi
+at UChicago.
+
 ```{r clustereg}
 clustreg=function(dat,k,tries,sed,niter) {
-
-set.seed(sed)
-dat=as.data.frame(dat)
-rsq=rep(NA,niter)
-res=list()
-rsq.best=0
-    for(l in 1:tries) {
-
-	c = sample(1:k,nrow(dat),replace=TRUE)
-	yhat=rep(NA,nrow(dat))
-	for(i in 1:niter) {		
-		resid=pred=matrix(0,nrow(dat),k)
-		for(j in 1:k){	
-			pred[,j]=predict(glm(dat[c==j,],family="gaussian"),newdata=dat)		
-			resid[,j] = (pred[,j]-dat[,1])^2
-		}
-
-	c = apply(resid,1,fun.index.rowmin)
-	for(m in 1:nrow(dat)) {yhat[m]=pred[m,c[m]]}
-	rsq[i] = cor(dat[,1],yhat)^2	
-	#print(rsq[i])
-	}
-	
-	if(rsq[niter] > rsq.best) {	
-		rsq.best=rsq[niter]
-		l.best=l
-            c.best=c
-		yhat.best=yhat
-		}
+  set.seed(sed)
+  dat=as.data.frame(dat)
+  rsq=rep(NA,niter)
+  res=list()
+  rsq.best=0
+  
+  for(l in 1:tries) {
+    
+  	c = sample(1:k,nrow(dat),replace=TRUE)
+  	yhat=rep(NA,nrow(dat))
+  	
+  	for(i in 1:niter) {		
+  		resid=pred=matrix(0,nrow(dat),k)
+  		for(j in 1:k){	
+  			pred[,j]=predict(glm(dat[c==j,],family="gaussian"),newdata=dat)		
+  			resid[,j] = (pred[,j]-dat[,1])^2
+  		}
+  		
+  	c = apply(resid,1,fun.index.rowmin)
+  	
+  	for(m in 1:nrow(dat)) {yhat[m]=pred[m,c[m]]}
+  	
+  	rsq[i] = cor(dat[,1],yhat)^2	
     }
-
-    for(i in k:1) res[[i]]=summary(lm(dat[c.best==i,]))
+  	
+    if(rsq[niter] > rsq.best) {	
+    	rsq.best=rsq[niter]
+    	l.best=l
+      c.best=c
+    	yhat.best=yhat
+    }
+  }
+  
+  for(i in k:1) res[[i]]=summary(lm(dat[c.best==i,]))
 	
-return(list(data=dat,nclust=k,tries=tries,seed=sed,rsq.best=rsq.best,number.loops=niter, Best.try=l.best,cluster=c.best,results=res))
+  return(list(
+    data=dat,
+    nclust=k,
+    tries=tries,
+    seed=sed,
+    rsq.best=rsq.best,
+    number.loops=niter, 
+    Best.try=l.best,
+    cluster=c.best,
+    results=res))
 }
 
 fun.index.rowmin=function(x) {
@@ -80,56 +113,144 @@ clustreg.predict=function(results,newdat){
 	yhat=rep(NA,nrow(newdat))
 	resid=pred=matrix(0,nrow(newdat),length(table(results$cluster)))
 		
-		for(j in 1:length(table(results$cluster))){			
-			pred[,j]=predict(glm(results$data[results$cluster==j,],family="gaussian"),newdata=newdat)		
+		for(j in 1:length(table(results$cluster))) {			
+			pred[,j] = predict(glm(results$data[results$cluster==j,],family="gaussian"),
+			                   newdata=newdat)		
+			
 			resid[,j] = (pred[,j]-newdat[,1])^2
 		}
 
 	c = apply(resid,1,fun.index.rowmin)
+	
 	for(m in 1:nrow(newdat)) {yhat[m]=pred[m,c[m]]}
+	
 	rsq = cor(newdat[,1],yhat)^2	
 
-return(list(results=results,newdata=newdat,cluster=c,yhat=yhat,rsq=rsq))
-
+  return(list(results=results,newdata=newdat,cluster=c,yhat=yhat,rsq=rsq))
 }
 ```
 
-```{r}
-clustreg.1=clustreg(Train[,c(2,1,3:7)],1,1,123,1)
-clustreg.2=clustreg(Train[,c(2,1,3:7)],2,12,123,10)
-clustreg.3=clustreg(Train[,c(2,1,3:7)],3,19,123,10)
-```
+## 3. Model Building
+
+Build a clusterwise regression model for 1, 2, and 3 clusters for predicting
+"Amount" from the other numeric columns.
 
 ```{r}
-data.frame(
+clustreg.1=clustreg(Train,1,1,123,1)
+clustreg.2=clustreg(Train,2,2,123,10)
+clustreg.3=clustreg(Train,3,2,123,10)
+```
+
+How did the different number of clusters break up the data?
+
+```{r}
+prop.table(table(clustreg.1$cluster))
+prop.table(table(clustreg.2$cluster))
+prop.table(table(clustreg.3$cluster))
+```
+
+Model 1 has 100% in the first and only cluster. This is by definition since
+there are not other clusters. The second model split the data rougly 70:30 
+while model three split roughly 70:15:15. Is it possible that the third model
+just split model two's second cluster into two more clusters? That is, are 
+model 2 cluster 1 and model 3 cluster 2 really the same cluster?
+
+```{r}
+table(clustreg.2$cluster, clustreg.3$cluster)
+```
+
+The answer is no. The clusters are distinct. While there is significant overlap
+(72%) between model 2 cluster 1 and model 3 cluster 2, there's not enough to 
+call them the "same" cluster really.
+
+How much additional variance gets explained by using clusterwise regression?
+
+```{r}
+training.rsq = data.frame(
   nclust=1:3, 
   rsq = sapply(list(clustreg.1, clustreg.2, clustreg.3), 
-               function(cl) cl$rsq.best)) %>%
-  ggplot(aes(x=nclust, y=rsq)) + 
+               function(cl) cl$rsq.best))
+
+ggplot(training.rsq, aes(x=nclust, y=rsq)) + 
   geom_bar(stat="identity") +
   geom_text(aes(label=paste0(round(rsq*100,1),"%")), vjust=1.5, color="white") + 
   labs(x="Number of Clusters",
        y="Best R^2",
-       title="Clusterwise Regression Performance",
-       subtitle="The more clusters the better! (up to 3)")
+       title="Clusterwise Regression Performance")
 ```
 
+Clusterwise regression does pretty well! A 3-cluster model has an R^2 that is 
+almost 80% better than the single-cluster model. Of course we don't know how
+good the models actually are unless a holdout test is performed.
+
+## 4. Holdout validation
+
+Use the `cluser.predict` with each model. This function applies each 
+regression model to each datapoint then assigns clusters based on minimizing
+the difference between actual and predicted values. Therefore cluster 
+proportion is just as important as explained variance.
+
 ```{r}
-pv.1 <- clustreg.predict(clustreg.1, Test[,c(2,1,3:7)])
-pv.2 <- clustreg.predict(clustreg.2, Test[,c(2,1,3:7)])
-pv.3 <- clustreg.predict(clustreg.3, Test[,c(2,1,3:7)])
+pv.1 <- clustreg.predict(clustreg.1, Test)
+pv.2 <- clustreg.predict(clustreg.2, Test)
+pv.3 <- clustreg.predict(clustreg.3, Test)
 ```
 
+Cluster sizes
 
 ```{r}
-data.frame(
+bind_rows(
+  prop.table(table(clustreg.2$cluster)),
+  prop.table(table(pv.2$cluster))) %>%
+  mutate(group=c('Train', 'Holdout'))
+
+bind_rows(
+  prop.table(table(clustreg.3$cluster)),
+  prop.table(table(pv.3$cluster))) %>%
+  mutate(group=c('Train', 'Holdout'))
+```
+
+The clusers stay pretty conistent between training and holdout. There are some
+moderate changes but none of the clusters swaps _that_ much. There are no 
+cases of the largest cluster losing that title or anything.
+
+How do the R^2 compare?
+
+```{r}
+holdout.rsq = data.frame(
   nclust=1:3, 
   rsq = sapply(list(pv.1, pv.2, pv.3), 
-               function(cl) cl$rsq)) %>%
-  ggplot(aes(x=nclust, y=rsq)) + 
+               function(cl) cl$rsq)) 
+
+ggplot(holdout.rsq, aes(x=nclust, y=rsq)) + 
   geom_bar(stat="identity") +
   geom_text(aes(label=paste0(round(rsq*100,1),"%")), vjust=1.5, color="white") + 
   labs(x="Number of Clusters",
        y="Best R^2",
        title="Holdout Validation R^2")
+
+pct.rsq.change <- (holdout.rsq - training.rsq) / training.rsq
+pct.rsq.change$nclust <- 1:3
+
+df.rsq <- cbind(train=training.rsq$rsq, 
+                holdout=holdout.rsq$rsq, 
+                pct_change = pct.rsq.change$rsq)
+row.names(df.rsq) <- 1:3
+round(df.rsq * 100, 1)
 ```
+
+The R^2 levels are pretty stable. With two and three clusters the R^2 decreased
+a little bit but not by much. The cluserwise regression seems to have a really
+powerful impact on this dataset.
+
+## 5. Cluster Interpretation
+
+```{r}
+Train$Cluster2 <- clustreg.2$cluster
+Train$Cluster3 <- clustreg.3$cluster
+```
+
+## 5. Summary
+
+
+
