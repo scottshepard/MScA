@@ -7,10 +7,16 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# LDA & QDA
+
+## 1. Data & Setup
+
 ```{r}
-library(dplyr)
-library(ggplot2)
-library(MASS)
+suppressMessages(library(dplyr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(caret))
+suppressMessages(library(MASS))
+library(rpart)
 
 splitData <- function(data, smp_size) {
   # Take a dataset and split it randomly into train and test sets
@@ -25,26 +31,91 @@ splitData <- function(data, smp_size) {
 path <- "~/Dropbox/MScA/31008 - Data Mining/"
 GC <- read.csv(file.path(path, "GermanCredit.csv"))
 
-numeric_vars <- c(
-  "Duration.of.Credit..month.",
-  "Credit.Amount",
-  "Instalment.per.cent",
-  "Duration.in.Current.address",
-  "Age..years.",
-  "No.of.Credits.at.this.Bank",
-  "No.of.dependents")
-
-for(col in names(GC)[! names(GC) %in% numeric_vars]) {
-  GC[,col] <- as.factor(GC[,col])
-}
-
 set.seed(123)
 splitted <- splitData(GC, 700)
 Train <- splitted$train
 Test  <- splitted$test
 ```
 
+## 2. Model Building
 
 ```{r}
-lda.1 <- lda(class ~ ., Train)
+# bad_cols <- c(14,19,27,30,35,40,44,45,48,52,55,58,62)
+lda.out <- lda(Creditability ~ . , Train)
+qda.out <- qda(Creditability ~ . , Train)
+
+lda.pv <- predict(lda.out)
+qda.pv <- predict(qda.out)
+
+prop.table(table(Train$Creditability, lda.pv$class))
+prop.table(table(Train$Creditability, qda.pv$class))
 ```
+
+## 3. Holdout Validation
+
+```{r}
+lda.pv.hd <- predict(lda.out, newdata = Test)
+qda.pv.hd <- predict(qda.out, newdata = Test)
+
+prop.table(table(Test$Creditability, lda.pv.hd$class))
+prop.table(table(Test$Creditability, qda.pv.hd$class))
+```
+
+# Ensemble Model
+
+```{r}
+Train <- splitted$train
+Test  <- splitted$test
+
+Tree.Model = rpart(factor(Creditability) ~ ., data=Train,
+                   control=rpart.control(cp=0.0150754, minsplit=30, xval=10))
+
+Logit.Model = glm(formula = Creditability ~ Account.Balance + 
+                   Duration.of.Credit..month. + 
+                   Payment.Status.of.Previous.Credit + Purpose + Credit.Amount +
+                   Value.Savings.Stocks + Instalment.per.cent + 
+                   Sex...Marital.Status + Guarantors + Type.of.apartment +
+                   No.of.dependents + Telephone + Foreign.Worker, 
+                 family = binomial(link = logit), data = Train)
+```
+
+```{r}
+Train$Class.Tree  <- predict(Tree.Model, type="class")
+Train$Class.Logit <- factor(as.numeric(predict(Logit.Model, type="response") >= 0.8))
+Train$Class.LDA <- predict(lda.out)$class
+Train$Class.QDA <- predict(qda.out)$class
+
+ensemble <- function(df) {
+  vec <- with(df, as.numeric(Class.Tree)-1 + as.numeric(Class.Logit)-1 +
+                as.numeric(Class.LDA)-1 + as.numeric(Class.QDA)-1)
+  sapply(vec, function(x) {
+    if(x > 2) {
+      1
+    } else if(x < 2) {
+      0
+    } else {
+      sample(c(0,1), 1)
+    }
+  })
+}
+
+Train$Ensemble <- ensemble(Train)
+
+Test$Class.Tree  <- predict(Tree.Model, type="class", newdata = Test)
+Test$Class.Logit <- factor(as.numeric(predict(Logit.Model, type="response", newdata = Test) >= 0.8))
+Test$Class.LDA <- predict(lda.out, newdata = Test)$class
+Test$Class.QDA <- predict(qda.out, newdata = Test)$class
+Test$Ensemble <- ensemble(Test)
+```
+
+```{r}
+prop.table(table(Train$Creditability,Train$Ensemble))
+
+prop.table(table(Test$Creditability,Test$Ensemble))
+```
+
+```{r}
+
+```
+
+
