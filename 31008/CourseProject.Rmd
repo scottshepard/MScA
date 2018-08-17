@@ -16,8 +16,6 @@ library(rpart)
 
 ```{r read_data}
 # Read Data
-path <- "~/Dropbox/MScA/31008 - Data Mining/Project/fma_metadata/"
-
 special_read_csv <- function(file_path, n_rows=-1, offset=0) {
   # The flat files in this project are formatted for easy python loading. 
   # The headers are a multilevel index. 
@@ -44,15 +42,13 @@ special_read_csv <- function(file_path, n_rows=-1, offset=0) {
 ```
 
 ```{r clean_data}
-df <- read.csv(file.path(path, "Tracks_Echonest_Merged.csv"))
+path <- "~/Dropbox/MScA/31008 - Data Mining/Project/"
+df <- read.csv(file.path(path, "Project_Data.csv"))
 
-names(df)[names(df) == "track_genre_top"] <- "genre"
+names(df)[names(df) == "genre_top"] <- "genre"
 df$genre <- as.character(df$genre)
 df <- df[! df$genre %in% c("", "International", "Experimental"), ]
 df$genre <- factor(df$genre)
-
-names(df)[grepl("audio_features_", names(df))] <- 
-  str_remove(names(df)[grepl("audio_features_", names(df))], "audio_features_")
 
 df$tempo_scaled <- scales::rescale(df$tempo)
 ```
@@ -72,10 +68,11 @@ splitData <- function(data, smp_size) {
 ```{r exploration}
 ggplot(df, aes(x=genre)) + 
   geom_bar(stat='count') +
-  theme(axis.text.x = element_text(angle=90)) + 
-  labs(title="Frequency of Genres within Dataset",
-       x="")
-
+  ggthemes::theme_fivethirtyeight() +
+  theme(axis.text.x = element_text(angle=90),
+        axis.title.x = element_blank()) + 
+  labs(title="Frequency of Genres")
+  
 table(df$genre)
 ```
 
@@ -88,6 +85,20 @@ melted <- melt(df, id.vars=c("genre", "track_id"),
                measure.vars=audio_feature_cols,
                variable.name="audio_feature")
 melted$audio_feature <- str_remove(melted$audio_feature, "audio_features_")
+```
+
+```{r}
+ggplot(df, aes(x=danceability)) + 
+  geom_histogram(fill="#1db954", color="black") + 
+  ggthemes::theme_fivethirtyeight() + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title="Dancibility!")
+
+ggplot(df, aes(x=acousticness)) + 
+  geom_histogram(fill="#1db954", color="black") + 
+  ggthemes::theme_fivethirtyeight() + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title="Acousticness")
 ```
 
 ```{r}
@@ -122,69 +133,123 @@ CP
 Final Model
 
 ```{r}
-xp = rpart(genre ~ acousticness + danceability + energy + instrumentalness + 
-             liveness + speechiness + tempo + valence,
-           data=train, control=rpart.control(cp=CP, minsplit=10, xval=10))
+Simple.Tree = rpart(genre ~ acousticness + danceability + energy + 
+                      instrumentalness + liveness + speechiness + tempo + valence,
+                    data=train, control=rpart.control(cp=CP, minsplit=10, xval=10))
 
-train$pg <- predict(xp, type="class")
+train$Genre.Tree <- predict(Simple.Tree, type="class")
 ```
 
 Model Validation
 
 ```{r}
-prop.table(table(train$genre, train$pg))
+prop.table(table(train$genre, train$Genre.Tree))
 
-accuracy <- train %>%
-  group_by(pg) %>%
-  summarize(pct=mean(pg == genre))
-ggplot(accuracy, aes(x=pg, y=pct)) + 
-  geom_bar(stat="identity") + 
-  scale_y_continuous(labels=scales::percent) +
-  theme(axis.title.x = element_blank()) +
-  labs(title="Preciction Accuracy -- Training Data",
-       subtitle="Given a Prection, How Likely is it to be true?",
-       y="Percent of Values Predicted Correctly")
+accuracyTable <- function(df, pred.col) {
+  group_by_(df, pred.col) %>%
+    summarize_(pct=lazyeval::interp(~ mean(var == genre), var=as.name(pred.col)))
+}
 
-correct_classify <- train %>%
-  group_by(genre) %>%
-  summarize(pct=mean(pg == genre))
-ggplot(correct_classify, aes(x=genre, y=pct)) + 
-  geom_bar(stat="identity") +
-  scale_y_continuous(labels=scales::percent) +
-  theme(axis.title.x = element_blank()) +
-  labs(title="Correct Classification -- Training Data",
-       subtitle="Given a track, how likely is it to be correctly classified",
-       y="Percent of Observations Correctly Classified")
+correctClassifyTable <- function(df, pred.col) {
+  group_by(df, genre) %>%
+    summarize_(pct=lazyeval::interp(~ mean(var == genre), var=as.name(pred.col)))
+}
 
-table(train[,c('genre', 'pg')])
+accuracyPlot <- function(df, pred.col) {
+  accuracy <- accuracyTable(df, pred.col=pred.col)
+  
+  ggplot(accuracy, aes_string(x=pred.col, y="pct")) + 
+    geom_bar(stat="identity") + 
+    geom_text(aes(y=pct, label=paste0(round(pct*100,1), "%")),
+              vjust=1.5, color="white") +
+    scale_y_continuous(labels=scales::percent) +
+    theme(axis.title.x = element_blank()) +
+    labs(title="Preciction Accuracy -- Training Data",
+         subtitle="Given a Prection, How Likely is it to be true?",
+         y="Percent of Values Predicted Correctly")
+}
+
+correctClassifyPlot <- function(df, pred.col) {
+  correct_classify <- correctClassifyTable(df, pred.col=pred.col)
+  
+  ggplot(correct_classify, aes(x=genre, y=pct)) + 
+    geom_bar(stat="identity") + 
+    geom_text(aes(y=pct, label=paste0(round(pct*100,1), "%")),
+              vjust=1.5, color="white") +
+    scale_y_continuous(labels=scales::percent) +
+    theme(axis.title.x = element_blank()) +
+    labs(title="Correct Classification",
+         subtitle="Given a track, how likely is it to be correctly classified?",
+         y="Percent of Observations Correctly Classified")
+}
+
+accuracyPlot(train, "Genre.Tree")
+correctClassifyPlot(train, "Genre.Tree")
 ```
 
 Holdout validation
 
 ```{r}
-holdout$pg <- predict(xp, type="class", newdata = holdout)
+holdout$Genre.Tree <- predict(Simple.Tree, type="class", newdata = holdout)
 
-table(holdout$genre, holdout$pg)
+table(holdout$genre, holdout$Genre.Tree)
 
-accuracy <- holdout %>%
-  group_by(pg) %>%
-  summarize(pct=mean(pg == genre))
-ggplot(accuracy, aes(x=pg, y=pct)) + 
-  geom_bar(stat="identity") + 
-  scale_y_continuous(labels=scales::percent) +
-  theme(axis.title.x = element_blank()) +
-  labs(title="Preciction Accuracy -- Holdout Data",
-       subtitle="Given a Prection, How Likely is it to be true?",
-       y="Percent of Values Predicted Correctly")
+accuracyPlot(holdout, "Genre.Tree")
+correctClassifyPlot(holdout, "Genre.Tree")
 
-correct_classify <- holdout %>%
-  group_by(genre) %>%
-  summarize(pct=mean(pg == genre))
-ggplot(correct_classify, aes(x=genre, y=pct)) + 
-  geom_bar(stat="identity") +
-  scale_y_continuous(labels=scales::percent) +
-  theme(axis.title.x = element_blank()) +
-  labs(title="Correct Classification -- Holdout Data",
-       subtitle="Given a track, how likely is it to be correctly classified?",
-       y="Percent of Observations Correctly Classified")
+```
+
+# Multinomial Logit
+
+```{r}
+Multi.Logit <- nnet::multinom(genre ~ acousticness + danceability + energy + 
+                      instrumentalness + liveness + speechiness + tempo + valence,
+                    data=train)
+
+train$Genre.Multilogit <- predict(Multi.Logit, data=train)
+table(train$genre, train$Genre.Multilogit)
+
+accuracyPlot(train, "Genre.Multilogit")
+correctClassifyPlot(train, "Genre.Multilogit")
+```
+
+# LDA & QDA
+
+```{r}
+LDA.Model <- lda(genre ~ . , train[,c('genre','acousticness','danceability',
+                                      'energy','instrumentalness','liveness',
+                                      'speechiness','tempo','valence')])
+train$Genre.LDA <- predict(LDA.Model)$class
+
+QDA.Model <- qda(genre ~ . , train[,c('genre','acousticness','danceability',
+                                      'energy','instrumentalness','liveness',
+                                      'speechiness','tempo','valence')])
+train$Genre.QDA <- predict(QDA.Model)$class
+
+accuracyPlot(train, "Genre.LDA")
+correctClassifyPlot(train, "Genre.LDA")
+accuracyPlot(train, "Genre.QDA")
+correctClassifyPlot(train, "Genre.QDA")
+```
+
+```{r}
+Model.RF <- randomForest::randomForest(genre ~ acousticness + danceability + energy + 
+                      instrumentalness + liveness + speechiness + tempo + valence, 
+                      data=train)
+train$Genre.RF <- Model.RF$predicted
+holdout$Genre.RF <- predict(Model.RF, newdata = holdout)
+```
+
+```{r}
+accuracyPlot(train, "Genre.RF")
+correctClassifyPlot(train, "Genre.RF")
+
+accuracyPlot(train, "Genre.Tree")
+correctClassifyPlot(train, "Genre.Tree")
+
+accuracyPlot(holdout, "Genre.RF")
+correctClassifyPlot(holdout, "Genre.RF")
+
+accuracyPlot(holdout, "Genre.Tree")
+correctClassifyPlot(holdout, "Genre.Tree")
 ```
