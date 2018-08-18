@@ -7,6 +7,14 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+In this assignment I use Linear Discriminant Analysis and Quadratic 
+Discriminant Analysis to predict creditability in the German Credit dataset.
+These algorithms are like PCA but they use the response variable to evaluate
+the clustering instead of explained variance amoung the predictors.
+
+Then later, I combine all the models built in the past few months: LDA & QDA,
+Classification Trees, and Logistic Regression to create an ensemble model.
+
 # LDA & QDA
 
 ## 1. Data & Setup
@@ -47,9 +55,27 @@ qda.out <- qda(Creditability ~ . , Train)
 lda.pv <- predict(lda.out)
 qda.pv <- predict(qda.out)
 
-prop.table(table(Train$Creditability, lda.pv$class))
-prop.table(table(Train$Creditability, qda.pv$class))
+tbl <- prop.table(table(Train$Creditability, lda.pv$class))
+tbl
+
+accuracy <- round(100*(tbl[1,1] + tbl[2,2]))
+(accuracy)
+default_rate <- round(100*tbl[1,2]/sum(tbl[,2]))
+(default_rate)
+
+tbl <- prop.table(table(Train$Creditability, qda.pv$class))
+tbl
+
+accuracy <- round(100*(tbl[1,1] + tbl[2,2]))
+(accuracy)
+default_rate <- round(100*tbl[1,2]/sum(tbl[,2]))
+(default_rate)
 ```
+
+I use my favorite measures of accuracy and default rate here. Which the models
+are highly accurate (78% & 81% respectively) they have a higher default rate
+than I like. That is, they predict good credit when the real result is bad
+credit. This is a much worse mistake than predicting bad when the truth is good.
 
 ## 3. Holdout Validation
 
@@ -57,11 +83,35 @@ prop.table(table(Train$Creditability, qda.pv$class))
 lda.pv.hd <- predict(lda.out, newdata = Test)
 qda.pv.hd <- predict(qda.out, newdata = Test)
 
-prop.table(table(Test$Creditability, lda.pv.hd$class))
-prop.table(table(Test$Creditability, qda.pv.hd$class))
+tbl <- prop.table(table(Test$Creditability, lda.pv.hd$class))
+tbl
+
+accuracy <- round(100*(tbl[1,1] + tbl[2,2]))
+(accuracy)
+default_rate <- round(100*tbl[1,2]/sum(tbl[,2]))
+(default_rate)
+
+tbl <- prop.table(table(Test$Creditability, qda.pv.hd$class))
+tbl
+
+accuracy <- round(100*(tbl[1,1] + tbl[2,2]))
+(accuracy)
+default_rate <- round(100*tbl[1,2]/sum(tbl[,2]))
+(default_rate)
 ```
 
+Holdout validationi s pretty good. The proportions in the prop.table are 
+pretty similar, but it's not great. The default rate is even higher than in
+train. A default rate of 20%+ when train indicated only 13% like in the QDA
+model would be devasting to a bank.
+
 # Ensemble Model
+
+An ensemble model is not a new model. It takes the results of previous models
+and combines them. In this case we take four models: LDA, QDA, CLassification 
+Trees, and Logistic Regression. Majority rules, so if three models predict 
+good credit and one predicts bad we assign good to that row. Ties are 
+broken randomly.
 
 ```{r}
 Train <- splitted$train
@@ -109,13 +159,28 @@ Test$Ensemble <- ensemble(Test)
 ```
 
 ```{r}
-prop.table(table(Train$Creditability,Train$Ensemble))
+tbl <- prop.table(table(Train$Creditability,Train$Ensemble))
+tbl
 
-prop.table(table(Test$Creditability,Test$Ensemble))
+accuracy <- round(100*(tbl[1,1] + tbl[2,2]))
+(accuracy)
+default_rate <- round(100*tbl[1,2]/sum(tbl[,2]))
+(default_rate)
+
+tbl <- prop.table(table(Test$Creditability,Test$Ensemble))
+tbl
+
+accuracy <- round(100*(tbl[1,1] + tbl[2,2]))
+(accuracy)
+default_rate <- round(100*tbl[1,2]/sum(tbl[,2]))
+(default_rate)
 ```
 
-```{r}
+Again I'm using proportion tables as well as accuracy and default rates to 
+evaluate the models. While the trained model has a high accuracy, it's no 
+higher than the QDA model. It seems like the ensemble model performs as well
+as the best model that went into it, but no better. 
 
-```
-
-
+The holdout validation is quite disappointing. It lost five points in accuracy
+and six points in the default rate. I would not want to use this particular
+model to make any business decisions.
