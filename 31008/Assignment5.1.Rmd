@@ -250,7 +250,54 @@ Train$Cluster2 <- clustreg.2$cluster
 Train$Cluster3 <- clustreg.3$cluster
 ```
 
+```{r}
+clustreg.2$results
+```
+
+With two clusters we have two kinds of loans
+
+  1. Loans that start initially low, then amount increases with duration and
+  decreases with with installment percentage. The relative impact of rate and
+  duration is about the same.
+  2. Loans that start much higher, then decrease rapidly with installment rate.
+  These loans are much less sensitive proportionatly to other factors but 
+  are very price sensitive. These people are seeking out the best possible 
+  rate for their high balance loans.
+
+
+```{r}
+clustreg.3$results
+```
+
+With three cluster we have additional seperation on intercept. This splits
+into very high, medium, and low balance loans. Each loan amount is 
+sensitive to different values.
+
+  1. Very high balance loans - sensitive to installment rate, but more to 
+  the number of people in the residence.
+  2. Medium balance loans - somewhat sensitive to price.
+  3. Low balance loans - very sensitive to price
+
+These cluster assignments are completely at odds with each other.
+
+```{r}
+table(Train$Cluster2, Train$Cluster3)
+````
+
+As we see, there is not a lot of overlap between clusters. It seems like 
+the cluster assignments with two clusters are evenly split between three. It's 
+not as if three clusters merely split one of the two clusters. They are 
+very different.
+
 ## 5. Summary
 
+Cluster-wise linear regression had a great impact on this dataset. The R^2 
+value from one to three clusters increased by nearly 75%! That's a huge gain
+in the explained variance that a simple linear model can't compete with. 
+
+I am skeptical of the interpretation of the clusters. This method seems ideal 
+here but I can't quite wrap my head around what each of the clusters mean, and 
+I think it could be easily abused to boost output without a solid understanding
+of what each cluster is doing.
 
 
