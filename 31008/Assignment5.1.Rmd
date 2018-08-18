@@ -1,0 +1,303 @@
+---
+title: "Assignment5.1"
+output: pdf_document
+subtitle: "Clusterwise Regression"
+author: "Scott Shepard"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This this assignment I explore the method of clusterwise regression on the 
+German Credit dataset. Custerwise regression is a method to simulaneously 
+discover latent classes and increase the fit of a regression model, in this
+case a linear one. It can do this by first randomly assigning clusters to
+a dataset, performing a regression analysis, then iterating by flipping each
+point and seeing if the regression gets better or worse. It is validated 
+through standand holdout validation.
+
+## 1. Prep the Data
+
+```{r, results='hide'}
+suppressMessages(library(dplyr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(caret))
+
+splitData <- function(data, smp_size) {
+  # Take a dataset and split it randomly into train and test sets
+  # The size of the training set is the smp_size argument
+  train_ind <- sample(seq_len(nrow(data)), size = smp_size)
+  train <- data[ train_ind, ]
+  test  <- data[-train_ind, ]
+  
+  list("train"=train, "test"=test)
+}
+
+data("GermanCredit")
+
+# The caret package dataset's first seven variables are numeric.
+# The "Amount" variable is in the second column and must be placed in the 
+# first position for the clustreg function.
+GC <- GermanCredit[,c(2,1,3:7)]
+
+set.seed(123)
+splitted <- splitData(GC, 700)
+Train <- splitted$train
+Test  <- splitted$test
+```
+
+## 2. Function Definitions
+
+The clusterwise regression and prediction functions come from Anil Chaturvedi
+at UChicago.
+
+```{r clustereg}
+clustreg=function(dat,k,tries,sed,niter) {
+  set.seed(sed)
+  dat=as.data.frame(dat)
+  rsq=rep(NA,niter)
+  res=list()
+  rsq.best=0
+  
+  for(l in 1:tries) {
+    
+  	c = sample(1:k,nrow(dat),replace=TRUE)
+  	yhat=rep(NA,nrow(dat))
+  	
+  	for(i in 1:niter) {		
+  		resid=pred=matrix(0,nrow(dat),k)
+  		for(j in 1:k){	
+  			pred[,j]=predict(glm(dat[c==j,],family="gaussian"),newdata=dat)		
+  			resid[,j] = (pred[,j]-dat[,1])^2
+  		}
+  		
+  	c = apply(resid,1,fun.index.rowmin)
+  	
+  	for(m in 1:nrow(dat)) {yhat[m]=pred[m,c[m]]}
+  	
+  	rsq[i] = cor(dat[,1],yhat)^2	
+    }
+  	
+    if(rsq[niter] > rsq.best) {	
+    	rsq.best=rsq[niter]
+    	l.best=l
+      c.best=c
+    	yhat.best=yhat
+    }
+  }
+  
+  for(i in k:1) res[[i]]=summary(lm(dat[c.best==i,]))
+	
+  return(list(
+    data=dat,
+    nclust=k,
+    tries=tries,
+    seed=sed,
+    rsq.best=rsq.best,
+    number.loops=niter, 
+    Best.try=l.best,
+    cluster=c.best,
+    results=res))
+}
+
+fun.index.rowmin=function(x) {
+    
+    z=(1:length(x)) [x == min(x)]
+    if(length(z) > 1) { z=sample(z,1)}
+    return ( z ) 
+}
+
+clustreg.predict=function(results,newdat){
+
+	yhat=rep(NA,nrow(newdat))
+	resid=pred=matrix(0,nrow(newdat),length(table(results$cluster)))
+		
+		for(j in 1:length(table(results$cluster))) {			
+			pred[,j] = predict(glm(results$data[results$cluster==j,],family="gaussian"),
+			                   newdata=newdat)		
+			
+			resid[,j] = (pred[,j]-newdat[,1])^2
+		}
+
+	c = apply(resid,1,fun.index.rowmin)
+	
+	for(m in 1:nrow(newdat)) {yhat[m]=pred[m,c[m]]}
+	
+	rsq = cor(newdat[,1],yhat)^2	
+
+  return(list(results=results,newdata=newdat,cluster=c,yhat=yhat,rsq=rsq))
+}
+```
+
+## 3. Model Building
+
+Build a clusterwise regression model for 1, 2, and 3 clusters for predicting
+"Amount" from the other numeric columns.
+
+```{r}
+clustreg.1=clustreg(Train,1,1,123,1)
+clustreg.2=clustreg(Train,2,2,123,10)
+clustreg.3=clustreg(Train,3,2,123,10)
+```
+
+How did the different number of clusters break up the data?
+
+```{r}
+prop.table(table(clustreg.1$cluster))
+prop.table(table(clustreg.2$cluster))
+prop.table(table(clustreg.3$cluster))
+```
+
+Model 1 has 100% in the first and only cluster. This is by definition since
+there are not other clusters. The second model split the data rougly 70:30 
+while model three split roughly 70:15:15. Is it possible that the third model
+just split model two's second cluster into two more clusters? That is, are 
+model 2 cluster 1 and model 3 cluster 2 really the same cluster?
+
+```{r}
+table(clustreg.2$cluster, clustreg.3$cluster)
+```
+
+The answer is no. The clusters are distinct. While there is significant overlap
+(72%) between model 2 cluster 1 and model 3 cluster 2, there's not enough to 
+call them the "same" cluster really.
+
+How much additional variance gets explained by using clusterwise regression?
+
+```{r}
+training.rsq = data.frame(
+  nclust=1:3, 
+  rsq = sapply(list(clustreg.1, clustreg.2, clustreg.3), 
+               function(cl) cl$rsq.best))
+
+ggplot(training.rsq, aes(x=nclust, y=rsq)) + 
+  geom_bar(stat="identity") +
+  geom_text(aes(label=paste0(round(rsq*100,1),"%")), vjust=1.5, color="white") + 
+  labs(x="Number of Clusters",
+       y="Best R^2",
+       title="Clusterwise Regression Performance")
+```
+
+Clusterwise regression does pretty well! A 3-cluster model has an R^2 that is 
+almost 80% better than the single-cluster model. Of course we don't know how
+good the models actually are unless a holdout test is performed.
+
+## 4. Holdout validation
+
+Use the `cluser.predict` with each model. This function applies each 
+regression model to each datapoint then assigns clusters based on minimizing
+the difference between actual and predicted values. Therefore cluster 
+proportion is just as important as explained variance.
+
+```{r}
+pv.1 <- clustreg.predict(clustreg.1, Test)
+pv.2 <- clustreg.predict(clustreg.2, Test)
+pv.3 <- clustreg.predict(clustreg.3, Test)
+```
+
+Cluster sizes
+
+```{r}
+bind_rows(
+  prop.table(table(clustreg.2$cluster)),
+  prop.table(table(pv.2$cluster))) %>%
+  mutate(group=c('Train', 'Holdout'))
+
+bind_rows(
+  prop.table(table(clustreg.3$cluster)),
+  prop.table(table(pv.3$cluster))) %>%
+  mutate(group=c('Train', 'Holdout'))
+```
+
+The clusers stay pretty conistent between training and holdout. There are some
+moderate changes but none of the clusters swaps _that_ much. There are no 
+cases of the largest cluster losing that title or anything.
+
+How do the R^2 compare?
+
+```{r}
+holdout.rsq = data.frame(
+  nclust=1:3, 
+  rsq = sapply(list(pv.1, pv.2, pv.3), 
+               function(cl) cl$rsq)) 
+
+ggplot(holdout.rsq, aes(x=nclust, y=rsq)) + 
+  geom_bar(stat="identity") +
+  geom_text(aes(label=paste0(round(rsq*100,1),"%")), vjust=1.5, color="white") + 
+  labs(x="Number of Clusters",
+       y="Best R^2",
+       title="Holdout Validation R^2")
+
+pct.rsq.change <- (holdout.rsq - training.rsq) / training.rsq
+pct.rsq.change$nclust <- 1:3
+
+df.rsq <- cbind(train=training.rsq$rsq, 
+                holdout=holdout.rsq$rsq, 
+                pct_change = pct.rsq.change$rsq)
+row.names(df.rsq) <- 1:3
+round(df.rsq * 100, 1)
+```
+
+The R^2 levels are pretty stable. With two and three clusters the R^2 decreased
+a little bit but not by much. The cluserwise regression seems to have a really
+powerful impact on this dataset.
+
+## 5. Cluster Interpretation
+
+```{r}
+Train$Cluster2 <- clustreg.2$cluster
+Train$Cluster3 <- clustreg.3$cluster
+```
+
+```{r}
+clustreg.2$results
+```
+
+With two clusters we have two kinds of loans
+
+  1. Loans that start initially low, then amount increases with duration and
+  decreases with with installment percentage. The relative impact of rate and
+  duration is about the same.
+  2. Loans that start much higher, then decrease rapidly with installment rate.
+  These loans are much less sensitive proportionatly to other factors but 
+  are very price sensitive. These people are seeking out the best possible 
+  rate for their high balance loans.
+
+
+```{r}
+clustreg.3$results
+```
+
+With three cluster we have additional seperation on intercept. This splits
+into very high, medium, and low balance loans. Each loan amount is 
+sensitive to different values.
+
+  1. Very high balance loans - sensitive to installment rate, but more to 
+  the number of people in the residence.
+  2. Medium balance loans - somewhat sensitive to price.
+  3. Low balance loans - very sensitive to price
+
+These cluster assignments are completely at odds with each other.
+
+```{r}
+table(Train$Cluster2, Train$Cluster3)
+````
+
+As we see, there is not a lot of overlap between clusters. It seems like 
+the cluster assignments with two clusters are evenly split between three. It's 
+not as if three clusters merely split one of the two clusters. They are 
+very different.
+
+## 5. Summary
+
+Cluster-wise linear regression had a great impact on this dataset. The R^2 
+value from one to three clusters increased by nearly 75%! That's a huge gain
+in the explained variance that a simple linear model can't compete with. 
+
+I am skeptical of the interpretation of the clusters. This method seems ideal 
+here but I can't quite wrap my head around what each of the clusters mean, and 
+I think it could be easily abused to boost output without a solid understanding
+of what each cluster is doing.
+
+
