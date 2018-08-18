@@ -9,21 +9,44 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+## 1. Introduction
+
+The GermanCredit data comes from the `caret` package. It is a list of loans
+issued by a bank in Germany to various customers. Some of the variables are
+continuous numerics like Amount, others are categorical like job of the 
+applicant. In this excercise we are building a model to predict Amount
+from other variables in the dataset, then showing Central Limit Theorem by
+repeatedly building the same model with different training sets.
+
 ```{r data}
-library(caret)
+suppressMessages(library(dplyr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(caret))
 data("GermanCredit")
 GC <- GermanCredit
-GC$Amount <- log(GC$Amount)
 ```
+
+## 2. Model Building
 
 I chose to use only the installment rate
 percentage and duration as variables for predicting amount. I tried various 
-combinations of other variables but none of them led to higher R^2 values than
-these two variables along. This makes sense as interest rate and amount of the
-loan roughly determine the duration of the loan so the amount can be predicted
+combinations of other variables but none of them led to much higher R^2 values 
+than these two variables alone. This makes sense as interest rate and amount of 
+the loan roughly determine the duration of the loan so the amount can be predicted
 in reverse using these two variables.
 
-Split the data and train the model.
+### 2.1 Full Model
+
+Create a single linear model with the entire dataset once.
+
+```{r}
+full.model <- fit <- lm(Amount ~ Duration + InstallmentRatePercentage, data=GC)
+```
+
+### 2.3 Repeated Models
+
+Split the data into train and test sets and then build the model. Save
+the R^2 values for test and train all 1000 times.
 
 ```{r functions}
 splitData <- function(data, smp_size) {
@@ -50,14 +73,12 @@ buildModel <- function(train, test) {
 }
 ```
 
-Split the data into train and test sets and then build the model, save the 
-
 ```{r split}
 # Set the seed so the results are repeatable
 set.seed(123)
 
 # Build the same model 1000 times and save the output
-models <- lapply(1:100, function(i) {
+models <- lapply(1:1000, function(i) {
   data_list = splitData(GC, 632)
   buildModel(data_list$train, data_list$test)
 })
@@ -71,9 +92,130 @@ df <- plyr::ldply(models, function(m) {
 })
 ```
 
+## 3. Model Interpretation
+
+Now that all the models have been built, how did the model do? What do the 
+coefficients look like? 
+
+### 3.1 Coefficients
+
 ```{r}
 hist(df$Intercept)
 hist(df$Duration)
 hist(df$InstallmentRatePercentage)
-hist(df$test_r2)
 ```
+
+All of the coefficients show a normal-ish distribution, whichi is to be
+expected when repeately resampling and builing the same model.
+
+### 3.2 R^2
+
+```{r}
+
+hist(df$train_r2)
+hist(df$test_r2)
+
+reshape2::melt(df, id.vars="Intercept", measure.vars=c("test_r2", "train_r2")) %>%
+  ggplot(aes(x=value, color=variable)) + 
+  geom_density()
+
+df$pct_change_r2 <- (df$test_r2 - df$train_r2) / df$train_r2
+hist(df$pct_change_r2)
+
+sapply(df[,4:6], mean)
+```
+
+The R^2 for the train and test sets both sit at about 0.50. This is an okay
+but not fantastic value. In a glass half-full worldview, half the variance
+in the Amount can be explained with only two variables. These variables are
+therefore highly important and highly valuable. On the other hand, half 
+of the variance is due to other, unaccountable factors.
+
+It's very good that the range in both the R^2 distributions remains pretty
+much the same. The the overlayed density plots you can see that the test R^2
+spreads a bit wider with thicker tails than the train R^2. Part of this is 
+due to a smaller sample. The distribution naturally tightens up with more data 
+because of the Central Limit Theorem. But partly it's due to the nature of a 
+test set. The test data is not in the train data so the R^2 will vary a bit 
+more as the model is not optimized for that data. This is why a good R^2 in 
+test is so valuable.
+
+The overall percenage change in R^2 is centered around zero and skewed slightly
+positive. This is fantastic. It means that on average the models got slightly
+_better_ on the training set but mostly held very steady. This is the best
+result we could have hoped for.
+
+### 3.3 Compare to Full Model
+
+How does the mean of all the split models compare to the full model?
+
+One way to determine this is to compare the mean for each coefficient for
+all the split-data models to the overall full model.
+
+```{r coefficient_means}
+coef_means <- sapply(df[,1:3], mean)
+coef_sds   <- sapply(df[,1:3], sd)
+tbl <- rbind(full.model=c(full.model$coefficients), coef_means, coef_sds)
+rbind(tbl, pct_means_diff = (tbl[2,] - tbl[1,])/ tbl[1,] * 1000)
+```
+
+The means of the coefficients from the split-data models are remarkably close
+to the full model coefficients. The max differenct is in the intercept which
+is only 1.2% greater. The coefficients are actually less than a percentage
+point different, and far within a single standard deviation. I would expect
+with more data (10000 rows and 10000 models), for the coefficients to be
+even closer together.
+
+
+### 3.4 Confidence Intervals
+
+```{r}
+CI <- list(
+  Duration = c(
+    lower=coef_means[[2]] - qnorm(.975) * coef_sds[[2]],
+    upper=coef_means[[2]] + qnorm(.975) * coef_sds[[2]]),
+  IRP = c(
+    lower=coef_means[[3]] - qnorm(.975) * coef_sds[[3]],
+    upper=coef_means[[3]] + qnorm(.975) * coef_sds[[3]]))
+
+CI <- plyr::ldply(CI)
+names(CI)[[1]] <- "coef"
+
+CI$width <- (CI$upper - CI$lower) * sqrt(0.632)
+
+CI
+```
+
+If the confidence intervals have been computed correctly then roughly 95%
+of the coefficients generated from the split-data models should fall within
+the CIs.
+
+```{r}
+mean(df$Duration > CI$lower[1] & df$Duration < CI$upper[[1]])
+mean(df$InstallmentRatePercentage > CI$lower[2] & 
+       df$InstallmentRatePercentage < CI$upper[[2]])
+```
+
+The CIs have been computed correctly.
+
+```{r}
+full.model.CI <- data.frame(confint(full.model))
+names(full.model.CI) <- c("lower", "upper")
+full.model.CI$width <- full.model.CI$upper - full.model.CI$lower
+full.model.CI
+```
+
+The scaled CIs of the split-data models are much tigher than the full 
+model's CI's. What I think this means, is that repeatedly sampling can yeild
+virtually the same coefficients with greater precision.
+
+# 4. Summary
+
+This was a very interesting exercise. Repeatedly resampling and creating new
+linear models with a train/test validation is a cool way to almost bootstrap 
+a dataset. I could also see the central limit theorem working in action and 
+I understand the impact of it not only on means but but also coefficients in
+a linear model and the error term. Errors being normally distributed is a 
+very powerful phenomena that lets us run all sorts of models.
+
+
