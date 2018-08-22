@@ -153,7 +153,7 @@ Final Model
 ```{r}
 Simple.Tree = rpart(genre ~ acousticness + danceability + energy + 
                       instrumentalness + liveness + speechiness + tempo + valence,
-                    data=train, control=rpart.control(cp=CP, minsplit=10, xval=10))
+                    data=train, control=rpart.control(cp=9.6360e-04, minsplit=25, xval=20, maxsurrogate=0))
 
 train$Genre.Tree <- predict(Simple.Tree, type="class")
 prop.table(table(train$genre, train$Genre.Tree))
