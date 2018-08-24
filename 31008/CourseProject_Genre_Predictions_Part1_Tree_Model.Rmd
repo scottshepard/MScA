@@ -1,0 +1,111 @@
+---
+title: "Genre Prediction"
+author: "Anna L Whelan"
+date: "August 2, 2018"
+output: html_document
+---
+
+```{r}
+library(caret)
+set.seed(1)
+full.data <- read.csv("/Users/alwhe/Documents/MSCA 31008/Final Project/Project_Data.csv")
+empty.genre <- which(full.data$genre_top=="")
+international.genre <- which(full.data$genre_top=="International")
+experimental.genre <- which(full.data$genre_top=="Experimental")
+blues.genre <- which(full.data$genre_top=="Blues")
+full.data$genre_top[blues.genre] <- "Folk"
+full.data <- full.data[-c(empty.genre, international.genre, experimental.genre),]
+full.data <- droplevels(full.data)
+levels(full.data$genre_top)[3] <- "Folk/Blues"
+
+samp <- sample(1:nrow(full.data), size=0.7*nrow(full.data), replace=FALSE)
+
+d.train <- full.data[samp,]
+d.test <- full.data[-samp,]
+
+d.train.trim <- d.train[, c(11, 14, 15, 16, 17, 18, 19, 20, 21)]
+#names(d.train.trim) <- c("Genre", "A", "D", "E", "I", "L", "S", "T", "V")
+
+library(ggplot2)
+non.empty <- full.data[-c(empty.genre),]
+
+ggplot(full.data, aes(x=genre_top)) + geom_bar() + theme(axis.text.x = element_text(angle=90), axis.title.y=element_blank(), axis.title.x=element_blank()) + ggtitle("Genre Frequency")
+
+qplot(non.empty$genre_top, xlab="")
+
+```
+
+
+```{r}
+# PCA
+d.train.PCA <- d.train.trim[ ,-1]
+
+PCA.train <- princomp(scale(d.train.PCA))
+summary(PCA.train)
+var.table <- data.frame(n=1:8, VAF=(PCA.train$sdev^2/sum(PCA.train$sdev^2)), cum_VAF=cumsum(PCA.train$sdev^2/sum(PCA.train$sdev^2)))
+
+# 3. Scree plots for proportinal variance and cumulative variance
+ggplot(var.table, aes(x=n)) + geom_col(aes(y=VAF, color="Proportional"), width=0.1) + labs(x="Principal Component", y="Variance")
+
+for (i in 2:4) {
+  biplot(PCA.train$scores[1:100, c(1,i)], PCA.train$loadings[ ,c(1,i)], cex=0.6, col=c(4,6))
+}
+
+# PC1: energy, valence, dancibility
+# PC1: speechness, tempo
+# PC2: accost, dancibility, speechness
+# PC2: tempo, instrumentalness
+# PC3: instrumentalness, dancibility
+# PC4: tempo, acousticness
+# get rid of: liveliness, energy, valence
+
+```
+
+
+```{r}
+library(rpart)
+#d.train.trim.2 <- d.train.trim[, -c(6, 8, 9)]
+
+train.tree <- rpart(d.train.trim, control=rpart.control(cp=0, minsplit=25, xval=20, maxsurrogate=0))
+
+plot(train.tree, main="Classification Tree: Music Data", col=3, compress=TRUE, branch=0.2, uniform=TRUE)
+text(train.tree, cex=0.8, col=4, fancy=TRUE, fwidth=0.1, fheight=0.1, bg=c(5))
+
+plotcp(train.tree, minline=TRUE)
+printcp(train.tree)
+
+```
+
+```{r}
+#pruned tree
+library(rpart)
+library(rpart.plot)
+train.tree.pruned <- rpart(d.train.trim, control=rpart.control(cp=9.6360e-04, minsplit=25, xval=20, maxsurrogate=0))
+
+prp(train.tree.pruned, main="Classification Tree: Music Data", cex=0.3)# col=3, compress=FALSE, branch=0.9, uniform=TRUE)
+text(train.tree.pruned, cex=0.8, fancy=TRUE, fwidth=0.1, fheight=0.1) # fancy=TRUE, fwidth=0.1, fheight=0.1, bg=c(5))
+
+```
+
+
+```{r}
+
+cor.test <- round(prop.table(table(d.test$genre_top, predict(train.tree.pruned, newdata=d.test, type="class")),1),2)
+trial.25 <- diag(cor.test)
+trial.25
+
+```
+
+
+```{r}
+table(d.train.trim$genre_top)
+```
+
+```{r}
+#predict genre for empty
+new.genre <- predict(train.tree.pruned, newdata=full.data[empty.genre,], type="class")
+
+qplot(new.genre, xlab="") + theme(axis.text.x = element_text(angle=90))
+
+```
+
