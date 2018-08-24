@@ -21,15 +21,15 @@ Multinomial Logit, and Linear Discriminant Anaysis. This
 document examains other models we could have used.
 
 ```{r libraries}
-library(dplyr)
+suppressMessages(library(dplyr))
 library(ggplot2)
-library(gridExtra)
+suppressMessages(library(gridExtra))
 library(stringr)
 library(reshape2)
 library(rpart)
-library(MASS)
+suppressMessages(library(MASS))
 library(nnet)
-library(randomForest)
+suppressMessages(library(randomForest))
 ```
 
 The dataset is a cleaned version of what can be found on
@@ -46,31 +46,11 @@ df$genre <- factor(df$genre)
 df$tempo_scaled <- scales::rescale(df$tempo)
 ```
 
-```{r exploration}
-df <- df[! df$genre %in% c(""),]
-
-ggplot(df, aes(x=genre)) + 
-  geom_bar(stat='count') +
-  ggthemes::theme_fivethirtyeight() +
-  theme(axis.text.x = element_text(angle=90),
-        axis.title.x = element_blank()) + 
-  labs(title="Frequency of Genres")
-  
-table(df$genre)
-```
-
 ```{r}
 df$genre <- as.character(df$genre)
 df <- df[! df$genre %in% c("", "International", "Experimental"), ]
 df[df$genre %in% c("Folk", "Blues"), ]$genre <- c("Folk/Blues")
 df$genre <- factor(df$genre)
-
-ggplot(df, aes(x=genre)) + 
-  geom_bar(stat='count') +
-  ggthemes::theme_fivethirtyeight() +
-  theme(axis.text.x = element_text(angle=90),
-        axis.title.x = element_blank()) + 
-  labs(title="Frequency of Genres")
   
 table(df$genre)
 ```
@@ -87,22 +67,6 @@ ggplot(df, aes(x=acousticness)) +
   ggthemes::theme_fivethirtyeight() + 
   theme(plot.title = element_text(hjust = 0.5)) +
   labs(title="Acousticness")
-```
-
-```{r}
-audio_feature_cols = c("acousticness", "danceability", "energy", 
-                       "instrumentalness", "liveness", "speechiness", 
-                       "tempo_scaled", "valence")
-
-melted <- melt(df, id.vars=c("genre", "track_id"),
-               measure.vars=audio_feature_cols,
-               variable.name="audio_feature")
-melted$audio_feature <- str_remove(melted$audio_feature, "audio_features_")
-
-ggplot(melted, aes(x=value)) + 
-  geom_density(aes(y=..scaled..)) + 
-  facet_grid(genre~audio_feature) + 
-  labs(title="Density of Each Audio Feature with Genre")
 ```
 
 # Model Training
@@ -139,7 +103,6 @@ Simple.Tree = rpart(genre ~ acousticness + danceability +
                     data=train, control=rpart.control(cp=9.6360e-04, minsplit=25, xval=20, maxsurrogate=0))
 
 train$Genre.Tree <- predict(Simple.Tree, type="class")
-prop.table(table(train$genre, train$Genre.Tree))
 ```
 
 The main metric I used is accuracy. The question accuracy 
@@ -231,7 +194,7 @@ LDA.Model <- MASS::lda(
                       'speechiness','tempo','valence')])
 holdout$Genre.LDA <- predict(LDA.Model, newdata=holdout)$class
 lda_plot = accuracyPlot(holdout, "Genre.LDA") + 
-  ggtitle("Accuracy of LDA in Holdout")
+  ggtitle("Accuracy of LDA")
 lda_plot
 ```
 
@@ -255,14 +218,8 @@ Model.RF <- randomForest::randomForest(
 holdout$Genre.RF <- predict(Model.RF, newdata = holdout)
 
 rf_plot = accuracyPlot(holdout, "Genre.RF") + 
-  ggtitle("Accuracy of Random Forest in Holdout")
+  ggtitle("Accuracy of Random Forest")
 rf_plot
 ```
 
 # All plots together
-
-```{r}
-gridExtra::grid.arrange(tree_plot, logit_plot, rf_plot, lda_plot)
-```
-
-The tree model yeilded the best, most consistent accuracy measure.
