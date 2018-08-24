@@ -1,46 +1,39 @@
 ---
-title: "Genre Predictions"
+title: "Picking the Best Model for Genre Prediction"
 author: "Scott Shepard"
 subtitle: "Trees, Random Forest, and Multinomial Logit"
 date: "8/12/2018"
 output: pdf_document
 ---
 
+# Introduction
+
+In this project, we used the Free Music Archive dataset to first
+predict missing top-level genres from the echonest dataset and
+then used those predictions to enhance a playlist generator
+algorithm. We used the echonost audio features for both the
+parts of the project.
+
+Our final model was a simple classificaiton tree with a rather
+deep structure. We compared this model against other algorthims
+we learned about in Data Mining, specifically the Random Forest,
+Multinomial Logit, and Linear Discriminant Anaysis. This 
+document examains other models we could have used.
+
 ```{r libraries}
 library(dplyr)
 library(ggplot2)
+library(gridExtra)
 library(stringr)
 library(reshape2)
 library(rpart)
 library(MASS)
+library(nnet)
+library(randomForest)
 ```
 
-```{r read_data}
-# Read Data
-special_read_csv <- function(file_path, n_rows=-1, offset=0) {
-  # The flat files in this project are formatted for easy python loading. 
-  # The headers are a multilevel index. 
-  # The first row is the category: track, album, artist, or set. 
-  # The second row is the column name: id, producer, name, etc
-  # Togther they make up the full column name. These need to be read in 
-  # separately and manually pasted together to get the full column names.
-  row0 <- read.csv(file_path, nrows=1, skip=0+offset)
-  row1 <- read.csv(file_path, nrows=1, skip=1+offset)
-  
-  df <- read.csv(file_path, nrows=n_rows, skip=2+offset)
-  headers <- paste(
-    str_replace_all(names(row0), c("\\."="", "[0-9]+"="")), 
-    str_replace_all(names(row1), c("\\."="_")), 
-    sep="_")
-  headers[1] <- "track_id"
-  names(df) <- headers
-  df
-}
-
-# tracks <- special_read_csv(file.path(path, "tracks.csv"))
-# echonest <- special_read_csv(file.path(path, "echonest.csv"), offset=1)[,1:26]
-# df <- dplyr::inner_join(tracks, echonest, "track_id")
-```
+The dataset is a cleaned version of what can be found on
+[FMA github page](https://github.com/mdeff/fma).
 
 ```{r clean_data}
 path <- "~/Dropbox/MScA/31008 - Data Mining/Project/"
@@ -83,15 +76,17 @@ table(df$genre)
 ```
 
 ```{r}
-splitData <- function(data, smp_size) {
-  # Take a dataset and split it randomly into train and test sets
-  # The size of the training set is the smp_size argument
-  train_ind <- sample(seq_len(nrow(data)), size = smp_size)
-  train <- data[ train_ind, ]
-  test  <- data[-train_ind, ]
-  
-  list("train"=train, "test"=test)
-}
+ggplot(df, aes(x=danceability)) + 
+  geom_histogram(fill="#1db954", color="black") + 
+  ggthemes::theme_fivethirtyeight() + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title="Danceability!")
+
+ggplot(df, aes(x=acousticness)) + 
+  geom_histogram(fill="#1db954", color="black") + 
+  ggthemes::theme_fivethirtyeight() + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title="Acousticness")
 ```
 
 ```{r}
@@ -103,30 +98,28 @@ melted <- melt(df, id.vars=c("genre", "track_id"),
                measure.vars=audio_feature_cols,
                variable.name="audio_feature")
 melted$audio_feature <- str_remove(melted$audio_feature, "audio_features_")
-```
 
-```{r}
-ggplot(df, aes(x=danceability)) + 
-  geom_histogram(fill="#1db954", color="black") + 
-  ggthemes::theme_fivethirtyeight() + 
-  theme(plot.title = element_text(hjust = 0.5)) +
-  labs(title="Dancibility!")
-
-ggplot(df, aes(x=acousticness)) + 
-  geom_histogram(fill="#1db954", color="black") + 
-  ggthemes::theme_fivethirtyeight() + 
-  theme(plot.title = element_text(hjust = 0.5)) +
-  labs(title="Acousticness")
-```
-
-```{r}
 ggplot(melted, aes(x=value)) + 
   geom_density(aes(y=..scaled..)) + 
   facet_grid(genre~audio_feature) + 
   labs(title="Density of Each Audio Feature with Genre")
 ```
 
+# Model Training
+
 Split the data
+
+```{r}
+splitData <- function(data, smp_size) {
+  # Take a dataset and split it randomly into train and test sets
+  # The size of the training set is the smp_size argument
+  train_ind <- sample(seq_len(nrow(data)), size = smp_size)
+  train <- data[ train_ind, ]
+  test  <- data[-train_ind, ]
+  
+  list("train"=train, "test"=test)
+}
+```
 
 ```{r data_holdout}
 set.seed(1)
@@ -137,29 +130,22 @@ holdout <- l$test
 
 ## Simple Classification Tree
 
-```{r trees}
-x = rpart(genre ~ acousticness + danceability + energy + instrumentalness + 
-            liveness + speechiness + tempo + valence,
-          data=train, control=rpart.control(cp=0, minsplit=10, xval=10))
-
-plotcp(x)
-printcp(x)
-CP <- x$cptable[x$cptable[,'xerror'] == min(x$cptable[,'xerror']), 'CP']
-CP
-```
-
-Final Model
+The tree model parameters come from Anna Whelan.
 
 ```{r}
-Simple.Tree = rpart(genre ~ acousticness + danceability + energy + 
-                      instrumentalness + liveness + speechiness + tempo + valence,
+Simple.Tree = rpart(genre ~ acousticness + danceability + 
+                      energy + instrumentalness + liveness +
+                      speechiness + tempo + valence,
                     data=train, control=rpart.control(cp=9.6360e-04, minsplit=25, xval=20, maxsurrogate=0))
 
 train$Genre.Tree <- predict(Simple.Tree, type="class")
 prop.table(table(train$genre, train$Genre.Tree))
 ```
 
-Model Validation
+The main metric I used is accuracy. The question accuracy 
+answers is, "Given a prediction, what is the liklihood that
+prediction is correct?" We want high, across the board accuracy 
+measures in holdout.
 
 ```{r}
 accuracyTable <- function(df, pred.col) {
@@ -189,7 +175,6 @@ accuracyPlot <- function(df, pred.col) {
               vjust=-0.5, color="white") +
     scale_y_continuous(labels=scales::percent, 
                        limits = c(0,1)) +
-    
     ggthemes::theme_fivethirtyeight() +
     theme(axis.title.x = element_blank()) +
     labs(title="Preciction Accuracy",
@@ -211,102 +196,73 @@ correctClassifyPlot <- function(df, pred.col) {
          subtitle="Given a track, how likely is it to be correctly classified?",
          y="Percent of Observations Correctly Classified")
 }
-
-accuracyPlot(train, "Genre.Tree")
-correctClassifyPlot(train, "Genre.Tree")
 ```
 
-Holdout validation
-
 ```{r}
-holdout$Genre.Tree <- predict(Simple.Tree, type="class", newdata = holdout)
+holdout$Genre.Tree <- predict(Simple.Tree, type="class", 
+                              newdata = holdout)
 
-table(holdout$genre, holdout$Genre.Tree)
-
-accuracyPlot(holdout, "Genre.Tree")
+tree_plot = accuracyPlot(holdout, "Genre.Tree") + 
+  ggtitle("Accuracy of Classification Tree")
+tree_plot
 ```
 
-# Multinomial Logit
+## Multinomial Logit
 
 ```{r}
-Multi.Logit <- nnet::multinom(genre ~ acousticness + danceability + energy + 
-                      instrumentalness + liveness + speechiness + tempo +
-                        valence,
-                    data=train)
-
-train$Genre.Multilogit <- predict(Multi.Logit, data=train)
-table(train$genre, train$Genre.Multilogit)
-
-accuracyPlot(train, "Genre.Multilogit")
+Multi.Logit <- nnet::multinom(
+  genre ~ acousticness + danceability + energy + 
+    instrumentalness + liveness + speechiness + tempo + valence,
+  data=train)
 
 holdout$Genre.Multilogit <- predict(Multi.Logit, newdata=holdout)
 
-accuracyPlot(holdout, "Genre.Multilogit") + ggtitle("Accuracy of Multi Logistic")
-
-mean(holdout$Genre.Multilogit == holdout$genre)
+logit_plot = accuracyPlot(holdout, "Genre.Multilogit") + 
+  ggtitle("Accuracy of Multi Logistic")
+logit_plot
 ```
 
-# LDA & QDA
+## LDA & QDA
 
 ```{r}
-LDA.Model <- MASS::lda(genre ~ . ,train[,c('genre','acousticness','danceability',
-                                      'energy','instrumentalness','liveness',
-                                      'speechiness','tempo','valence')])
-train$Genre.LDA <- predict(LDA.Model)$class
-
-QDA.Model <- MASS::qda(genre ~ . ,train[,c('genre','acousticness','danceability',
-                                      'energy','instrumentalness','liveness',
-                                      'speechiness','tempo','valence')])
-
-train$Genre.QDA <- predict(QDA.Model)$class
-
-accuracyPlot(train, "Genre.LDA")
-correctClassifyPlot(train, "Genre.LDA")
-
-accuracyPlot(train, "Genre.QDA") 
-correctClassifyPlot(train, "Genre.QDA")
-```
-
-```{r}
-path <- "~/Dropbox/MScA/31008 - Data Mining/Project/plots"
-
+LDA.Model <- MASS::lda(
+  genre ~ ., train[,c('genre','acousticness','danceability',
+                      'energy','instrumentalness','liveness',
+                      'speechiness','tempo','valence')])
 holdout$Genre.LDA <- predict(LDA.Model, newdata=holdout)$class
-holdout$Genre.QDA <- predict(QDA.Model, newdata=holdout)$class
+lda_plot = accuracyPlot(holdout, "Genre.LDA") + 
+  ggtitle("Accuracy of LDA in Holdout")
+lda_plot
+```
 
-accuracyPlot(holdout, "Genre.LDA") + ggtitle("Accuracy of LDA in Holdout")
+```{r}
+QDA.Model <- MASS::qda(
+  genre ~ . ,train[,c('genre','acousticness','danceability'
+                      ,'energy','instrumentalness','liveness',
+                      'speechiness','tempo','valence')])
+holdout$Genre.QDA <- predict(QDA.Model, newdata=holdout)$class
 accuracyPlot(holdout, "Genre.QDA") + ggtitle("Accuracy of QDA")
 ```
 
+## Random Forest
+
 ```{r}
-Model.RF <- randomForest::randomForest(genre ~ acousticness + danceability + energy + 
-                      instrumentalness + liveness + speechiness + tempo + valence, 
-                      data=train)
-train$Genre.RF <- Model.RF$predicted
+Model.RF <- randomForest::randomForest(
+  genre ~ acousticness + danceability + energy + instrumentalness +
+    liveness + speechiness + tempo + valence, 
+  data=train)
+
 holdout$Genre.RF <- predict(Model.RF, newdata = holdout)
+
+rf_plot = accuracyPlot(holdout, "Genre.RF") + 
+  ggtitle("Accuracy of Random Forest in Holdout")
+rf_plot
 ```
+
+# All plots together
 
 ```{r}
-accuracyPlot(holdout, "Genre.RF") + ggtitle("Accuracy of Random Forest in Holdout")
-correctClassifyPlot(holdout, "Genre.RF")
+gridExtra::grid.arrange(tree_plot, logit_plot, rf_plot, lda_plot)
 ```
 
-```{r}
-
-accuracyPlot(train, "Genre.RF")
-correctClassifyPlot(train, "Genre.RF")
-
-accuracyPlot(train, "Genre.Tree")
-correctClassifyPlot(train, "Genre.Tree")
-
-accuracyPlot(holdout, "Genre.RF")
-correctClassifyPlot(holdout, "Genre.RF")
-
-accuracyPlot(holdout, "Genre.Tree")
-correctClassifyPlot(holdout, "Genre.Tree")
-```
-
-```{r}
-accuracyPlot(holdout, "Genre.Multilogit") + ggtitle("Accuracy of Multi Logistic")
-accuracyPlot(holdout, "Genre.LDA") + ggtitle("Accuracy of LDA")
-accuracyPlot(holdout, "Genre.RF") + ggtitle("Accuracy of Random Forest")
-```
+The tree model yeilded the best, most consistent accuracy measure.
