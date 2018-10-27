@@ -1,0 +1,87 @@
+---
+title: "31012: Assignment 2"
+author: "Scott Shepard"
+date: "October 27 , 2018"
+output: html_document
+---
+
+```{r}
+library(RMySQL)
+library(dplyr)
+library(ggplot2)
+library(DBI)
+```
+
+```{r}
+connection = dbConnect(MySQL(),user="root", password="passphrase", 
+                       dbname="sakila", host="localhost")
+```
+
+Part B, Question 2f
+```{r}
+myQuery <- "
+select
+	film_id
+    , title
+    , rental_duration
+from film
+where 
+	title like '%ZOO%'
+    and rental_duration >= 4
+limit 10
+"
+dbGetQuery(connection, myQuery)
+```
+
+Part B, Quesiton 2h
+```{r}
+myQuery <- "
+select distinct district
+from address
+	left join customer on customer.address_id = address.address_id
+    left join staff on staff.address_id = address.address_id
+    left join store on store.address_id = address.address_id
+where 
+	customer.customer_id is not null
+    or staff.staff_id is not null
+    or store.store_id is not null
+limit 10
+"
+dbGetQuery(connection, myQuery)
+```
+
+Part B, Question 3b
+```{r}
+myQuery <- "
+select
+	min(amount) as mimimum_payment,
+    max(amount) as maximum_payment
+from payment
+"
+dbGetQuery(connection, myQuery)
+```
+
+Part B, Question 3d
+```{r}
+myQuery <- "
+select title
+from film
+where replacement_cost > 15
+	or rental_duration between 6 and 10
+limit 10
+"
+dbGetQuery(connection, myQuery)
+```
+
+Part B, Question 4c
+```{r}
+myQuery <- "
+select
+	rating,
+    count(*)
+from film
+where rating in ('G', 'NC-17', 'PG-17', 'PG', 'R')
+group by 1
+"
+dbGetQuery(connection, myQuery)
+```
