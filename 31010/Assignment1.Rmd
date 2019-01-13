@@ -3,7 +3,7 @@ title: "31010: Linear & Non-Linear Models -- Assignment 1"
 subtitle: "lm() vs glm()"
 author: "Scott Shepard"
 date: "1/13/2019"
-output: html_document
+output: rmarkdown::github_document
 ---
 
 ```{r setup, include=FALSE}
