@@ -150,11 +150,88 @@ c(From.GLM=GLM$deviance,
 6. AIC
 ======
 
+AIC can be calculated from LM using the `AIC()` function. Use that to compare to the aic computed as a part of glm.
+
+``` r
+c(AIC(LM),
+  GLM$aic)
+```
+
+    ## [1] 1637.602 1637.602
+
+AIC can also be calculated manually.
+
+AIC = -2\*log-likeihood + 2p
+
+where p is number of predictors-1
+
+``` r
+manual_log_likelihood <- function(linear_model) {
+  n = nrow(linear_model$model)
+  y = linear_model$model[1,]
+  sigma = sd(linear_model$residuals)
+  - n/2 * log(2*pi*sigma**2) - 1/(2*sigma**2) * sum(linear_model$residuals**2)
+}
+
+manual_aic <- function(linear_model) {
+  log_likelihood <- manual_log_likelihood(linear_model)
+  p = length(linear_model$coefficients)-1
+  -2*log_likelihood+2*p
+}
+
+cbind(AIC.Manual=manual_aic(LM),
+      AIC.From.Function=AIC(LM),
+      AIC.From.GLM=GLM$aic)
+```
+
+    ##      AIC.Manual AIC.From.Function AIC.From.GLM
+    ## [1,]   1633.603          1637.602     1637.602
+
 7. y
 ====
+
+``` r
+sum(abs(df[,1]-df$y))
+```
+
+    ## [1] 0
 
 8. Null Deviance
 ================
 
+Null deviance of glm() is the deviance of the null model, i.e. the model that has only intercept. Since deviance of glm() in case of
+`family=gaussian(link="identity")` is equivalent to SSE of lm() we need to estimate the null model with only intercept and calculate its SSE.
+
+``` r
+LM.Null <- lm(Output~1, data=df)
+
+c(LM.Null.SSE=sum(LM.Null$residuals**2), GLM.Null.Deviance=GLM$null.deviance)
+```
+
+    ##       LM.Null.SSE GLM.Null.Deviance 
+    ##          15187.73          15187.73
+
 9. Dispersion
 =============
+
+Dispersion for Gaussian models is the same as MSE.
+
+We can get to that number from several starting points.
+
+From LM sigma (residual standard deviation). MSE = sigma\*\*2
+
+``` r
+c(Disperson.From.GLM=summary(GLM)$dispersion,
+  MSE.From.LM.Sigma=sigma(LM)**2)
+```
+
+    ## Disperson.From.GLM  MSE.From.LM.Sigma 
+    ##           1.530141           1.530141
+
+From variance of residuals of glm
+
+``` r
+var(GLM$residuals)*((nrow(df))/(nrow(df)-3))
+```
+
+    ## [1] 1.530122
