@@ -1,0 +1,40 @@
+hdfs dfs -put /home/$USER/data/crimes.csv /user/$USER/data/crimes.csv 
+hive
+use sshepard;
+show tables;
+drop table if exists crimes;
+
+create external table CRIMES (
+    id int,
+    case_number string,
+    occurred_at timestamp,
+    block string,
+    iucr string,
+    primary_type string,
+    description string,
+    location_description string,
+    arrest boolean,
+    domestic boolean,
+    beat string,
+    district string,
+    ward int,
+    community_area int,
+    fbi_code string,
+    x_coordinate decimal,
+    y_coordinate decimal,
+    year int,
+    updated_on timestamp,
+    latitude decimal,
+    longitude decimal,
+    location string
+)
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
+WITH SERDEPROPERTIES (
+   "separatorChar" = ",",
+   "quoteChar"     = '\"',
+   "escapeChar"    = '\\') 
+STORED AS TEXTFILE
+LOCATION '/user/sshepard/data/'
+tblproperties("skip.header.line.count"="1"); 
+
+LOAD DATA INPATH '/user/sshepard/data/crimes.csv' INTO TABLE crimes;
