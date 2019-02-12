@@ -609,3 +609,85 @@ Average number of monthly crimes over 2017 was ~1600. That means that 2018 saw
 a 6% increase in the number of monthly assualts.  
 
 
+## Question 8
+
+From chicago_crimes table create a smaller (summarized) external table in Hive (that supports questions 9
+and 10) and download this summarized table to your computer as a CSV file.
+
+```
+create external table crimes_for_download (
+  primary_type string,
+  community_area string,
+  count int
+)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' ESCAPED BY '\\'
+LINES TERMINATED BY '\n' 
+STORED AS TEXTFILE
+LOCATION '/user/sshepard/data/'
+tblproperties("skip.header.line.count"="1");
+
+OK
+Time taken: 0.253 seconds
+```
+
+```
+INSERT OVERWRITE TABLE CRIMES_FOR_DOWNLOAD
+SELECT * FROM
+(SELECT
+   primary_type, 
+   community_area,
+   count(*) as count
+FROM chicago_crimes
+GROUP BY primary_type, community_area) t
+ORDER BY count desc;
+
+Query ID = sshepard_20190212145646_d913fa06-c47e-4537-821a-9e93af1e765d
+Total jobs = 2
+Launching Job 1 out of 2
+Number of reduce tasks not specified. Estimated from input data size: 37
+In order to change the average load for a reducer (in bytes):
+  set hive.exec.reducers.bytes.per.reducer=<number>
+In order to limit the maximum number of reducers:
+  set hive.exec.reducers.max=<number>
+In order to set a constant number of reducers:
+  set mapreduce.job.reduces=<number>
+19/02/12 14:56:46 INFO client.ConfiguredRMFailoverProxyProvider: Failing over to rm94
+Starting Job = job_1547750003855_3104, Tracking URL = http://md02.rcc.local:8088/proxy/application_1547750003855_3104/
+Kill Command = /opt/cloudera/parcels/CDH-6.1.0-1.cdh6.1.0.p0.770702/lib/hadoop/bin/hadoop job  -kill job_1547750003855_3104
+Hadoop job information for Stage-1: number of mappers: 8; number of reducers: 37
+2019-02-12 14:56:55,981 Stage-1 map = 0%,  reduce = 0%
+2019-02-12 14:57:05,270 Stage-1 map = 13%,  reduce = 0%, Cumulative CPU 7.92 sec
+2019-02-12 14:57:06,300 Stage-1 map = 63%,  reduce = 0%, Cumulative CPU 44.2 sec
+2019-02-12 14:57:07,335 Stage-1 map = 100%,  reduce = 0%, Cumulative CPU 81.66 sec
+2019-02-12 14:57:14,563 Stage-1 map = 100%,  reduce = 32%, Cumulative CPU 113.17 sec
+2019-02-12 14:57:16,622 Stage-1 map = 100%,  reduce = 100%, Cumulative CPU 203.51 sec
+MapReduce Total cumulative CPU time: 3 minutes 23 seconds 510 msec
+Ended Job = job_1547750003855_3104
+Launching Job 2 out of 2
+Number of reduce tasks determined at compile time: 1
+In order to change the average load for a reducer (in bytes):
+  set hive.exec.reducers.bytes.per.reducer=<number>
+In order to limit the maximum number of reducers:
+  set hive.exec.reducers.max=<number>
+In order to set a constant number of reducers:
+  set mapreduce.job.reduces=<number>
+19/02/12 14:57:19 INFO client.ConfiguredRMFailoverProxyProvider: Failing over to rm94
+Starting Job = job_1547750003855_3105, Tracking URL = http://md02.rcc.local:8088/proxy/application_1547750003855_3105/
+Kill Command = /opt/cloudera/parcels/CDH-6.1.0-1.cdh6.1.0.p0.770702/lib/hadoop/bin/hadoop job  -kill job_1547750003855_3105
+Hadoop job information for Stage-2: number of mappers: 2; number of reducers: 1
+2019-02-12 14:57:28,067 Stage-2 map = 0%,  reduce = 0%
+2019-02-12 14:57:34,280 Stage-2 map = 50%,  reduce = 0%, Cumulative CPU 2.39 sec
+2019-02-12 14:57:35,315 Stage-2 map = 100%,  reduce = 0%, Cumulative CPU 6.44 sec
+2019-02-12 14:57:43,601 Stage-2 map = 100%,  reduce = 100%, Cumulative CPU 13.25 sec
+MapReduce Total cumulative CPU time: 13 seconds 250 msec
+Ended Job = job_1547750003855_3105
+Loading data to table default.crimes_for_download
+MapReduce Jobs Launched:
+Stage-Stage-1: Map: 8  Reduce: 37   Cumulative CPU: 203.51 sec   HDFS Read: 2459799194 HDFS Write: 420621 HDFS EC Read: 0 SUCCESS
+Stage-Stage-2: Map: 2  Reduce: 1   Cumulative CPU: 13.25 sec   HDFS Read: 438955 HDFS Write: 353359 HDFS EC Read: 0 SUCCESS
+Total MapReduce CPU Time Spent: 3 minutes 36 seconds 760 msec
+OK
+Time taken: 58.856 seconds
+```
+
+
