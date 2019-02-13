@@ -615,31 +615,13 @@ From chicago_crimes table create a smaller (summarized) external table in Hive (
 and 10) and download this summarized table to your computer as a CSV file.
 
 ```
-create external table crimes_for_download (
-  primary_type string,
-  community_area string,
-  count int
-)
-ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' ESCAPED BY '\\'
-LINES TERMINATED BY '\n' 
-STORED AS TEXTFILE
-LOCATION '/user/sshepard/data/'
-tblproperties("skip.header.line.count"="1");
-
-OK
-Time taken: 0.253 seconds
-```
-
-```
-INSERT OVERWRITE TABLE CRIMES_FOR_DOWNLOAD
-SELECT * FROM
-(SELECT
+create table crimes_for_download as 
+SELECT
    primary_type, 
    community_area,
    count(*) as count
 FROM chicago_crimes
-GROUP BY primary_type, community_area) t
-ORDER BY count desc;
+GROUP BY primary_type, community_area
 
 Query ID = sshepard_20190212145646_d913fa06-c47e-4537-821a-9e93af1e765d
 Total jobs = 2
@@ -690,4 +672,8 @@ OK
 Time taken: 58.856 seconds
 ```
 
+To export the data to a csv
+```
+hive -e 'use sshepard; select * from crimes_for_download' | sed 's/[\t]/,/g' > crimes_to_download.csv
+```
 
