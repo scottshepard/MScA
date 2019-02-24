@@ -29,7 +29,7 @@ Course.Project.Data$minute <- floor(Course.Project.Data$Time / 60) + 1
 
 minute_data <- Course.Project.Data %>% 
   group_by(minute) %>%
-  summarize( count=n(), tempurature = mean(Temperature)) %>%
+  summarize( count=n(), temperature = mean(Temperature)) %>%
   data.frame()
 
 head(minute_data, 2)
@@ -38,9 +38,6 @@ dim(minute_data)
 # Step 1 Quiz 
 minute_data[67,]
 
-
-
-
 # Step 2
-
-glm(count ~ temperature, data=minute_data, family=poisson())
+m1 <- glm(count ~ temperature, data=minute_data, family=poisson())
+summary(m1)
