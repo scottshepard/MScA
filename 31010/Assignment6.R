@@ -33,8 +33,9 @@ predicted.prob.zero.component <- predict(zeroinfl.nb.fit, newdata=test_dat, type
 Probability.Zero <- predict(zeroinfl.nb.fit, newdata=test_dat, type='prob')[,1]
 
 # Get the probs of the zero count from the count part of the model 
-predicted.prob.count.component1 <- Probability.Zero - predicted.prob.zero.component
-
+# This is done by building a negative-binomial model and then overwriting the
+# paraemters with the extracted count model. Then finding the probability by
+# using predict on that model object.
 nb <- glm.nb(Output ~ Predictor.Count, test_dat)
 predict(nb, newdata = test_dat)
 nb$coefficients <- zeroinfl.nb.fit$coefficients$count
