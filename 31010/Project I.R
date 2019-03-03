@@ -85,3 +85,12 @@ pscl::odTest(m2.nb)
 # test stat: 4.7795
 # p-value: 0.0144
 
+# Step 3
+# Analyses of distributions of variables
+library(lattice)
+library(latticeExtra)
+
+sample1=rnorm(100)
+sample2=rnorm(100,1,2)
+Cum.Distr.Functions <- data.frame(sample1,sample2)
+ecdfplot(~ sample1 + sample2, data=Cum.Distr.Functions, auto.key=list(space='right'))
