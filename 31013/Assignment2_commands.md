@@ -1,9 +1,13 @@
 ## Question 1
 
+```
+cp /home/sshepard/data/chicago_crimes.csv /home/sshepard/data/crimes.csv
+```
+
 Create an external Hive table from this data set called chicago_crimes in a database named as <your userid>. (Try to match the column names from the metadata link above. Ensure that column names have no spaces or special characters)
 
 ```
-hdfs dfs -put /home/$USER/data/crimes.csv /user/$USER/data/crimes.csv 
+hdfs dfs -put /home/sshepard/data/crimes.csv /user/sshepard/data/crimes.csv 
 ```
 
 Open up hive, get environment ready
@@ -41,15 +45,10 @@ Create the external table
     longitude string,
     location string
 )
-ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
-WITH SERDEPROPERTIES (
-   "separatorChar" = ",",
-   "quoteChar"     = '\"',
-   "escapeChar"    = '\\') 
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ','
 STORED AS TEXTFILE
-LOCATION '/user/sshepard/data/'
+LOCATION '/user/sshepard/data/CRIMES'
 tblproperties("skip.header.line.count"="1"); 
-
 OK
 Time taken: 0.173 seconds
 ```
@@ -59,110 +58,10 @@ Time taken: 0.173 seconds
 Load all the chicago crimes data (~ 1.5 GB) from 2001 to present from the Chicago city data portal into chicago_crimes.
 
 ```
-hive> LOAD DATA INPATH '/user/sshepard/data/crimes.csv' INTO TABLE crimes;
+hive>  LOAD DATA INPATH '/user/sshepard/data/crimes.csv' INTO TABLE crimes;
 Loading data to table sshepard.crimes
 OK
 Time taken: 0.703 seconds
-```
-
-Unfortunately the data in occurred_at is stored as a string. Hive only supports
-a certain format type so it has to be uploaded first and then cast. My solution
-to this is to create another external table called `chicago_crimes` that will have the 
-right casting.
-
-```
-create external table CHICAGO_CRIMES (
-    id int,
-    case_number string,
-    occurred_at date,
-    block string,
-    iucr string,
-    primary_type string,
-    description string,
-    location_description string,
-    arrest boolean,
-    domestic boolean,
-    beat string,
-    district string,
-    ward int,
-    community_area int,
-    fbi_code string,
-    x_coordinate decimal,
-    y_coordinate decimal,
-    year int,
-    updated_on string,
-    latitude decimal,
-    longitude decimal,
-    location string
-)
-ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' ESCAPED BY '\\'
-LINES TERMINATED BY '\n' 
-STORED AS TEXTFILE
-LOCATION '/user/sshepard/data/'
-tblproperties("skip.header.line.count"="1"); 
-```
-
-Now I insert data into `chicago_crimes` from `crimes` using `insert overwrite`.
-
-```
-INSERT OVERWRITE TABLE CHICAGO_CRIMES 
-SELECT 
-    cast(id as int) as id,
-    cast(case_number as int) as case_number,
-    cast(from_unixtime(unix_timestamp(occurred_at,'MM/dd/yyyy HH:mm:ss aa')) as date) as occurred_at,
-    block,
-    iucr,
-    primary_type,
-    description,
-    location_description,
-    cast(arrest as boolean) as arrest,
-    cast(domestic as boolean) as domestic,
-    beat,
-    district,
-    cast(ward as int) as ward,
-    cast(community_area as int) as community_area,
-    fbi_code,
-    cast(x_coordinate as decimal) as x_coordinate,
-    cast(y_coordinate as decimal) as y_coordinate,
-    cast(year as int) as year,
-    updated_on,
-    latitude,
-    longitude,
-    location
-FROM crimes;
-
-Query ID = sshepard_20190212001349_ad582f44-a0bd-4163-baf3-8a6e871fa103
-Total jobs = 3
-Launching Job 1 out of 3
-Number of reduce tasks is set to 0 since there's no reduce operator
-19/02/12 00:13:49 INFO client.ConfiguredRMFailoverProxyProvider: Failing over to rm94
-Starting Job = job_1547750003855_3042, Tracking URL = http://md02.rcc.local:8088/proxy/application_1547750003855_3042/
-Kill Command = /opt/cloudera/parcels/CDH-6.1.0-1.cdh6.1.0.p0.770702/lib/hadoop/bin/hadoop job  -kill job_1547750003855_3042
-Hadoop job information for Stage-1: number of mappers: 10; number of reducers: 0
-2019-02-12 00:13:59,037 Stage-1 map = 0%,  reduce = 0%
-2019-02-12 00:14:16,584 Stage-1 map = 4%,  reduce = 0%, Cumulative CPU 217.76 sec
-2019-02-12 00:14:24,845 Stage-1 map = 14%,  reduce = 0%, Cumulative CPU 292.99 sec
-2019-02-12 00:14:28,970 Stage-1 map = 47%,  reduce = 0%, Cumulative CPU 357.84 sec
-2019-02-12 00:14:35,158 Stage-1 map = 59%,  reduce = 0%, Cumulative CPU 424.31 sec
-2019-02-12 00:14:40,308 Stage-1 map = 61%,  reduce = 0%, Cumulative CPU 430.25 sec
-2019-02-12 00:14:41,340 Stage-1 map = 64%,  reduce = 0%, Cumulative CPU 491.76 sec
-2019-02-12 00:14:45,461 Stage-1 map = 79%,  reduce = 0%, Cumulative CPU 507.22 sec
-2019-02-12 00:14:46,491 Stage-1 map = 84%,  reduce = 0%, Cumulative CPU 519.92 sec
-2019-02-12 00:14:47,522 Stage-1 map = 93%,  reduce = 0%, Cumulative CPU 541.18 sec
-2019-02-12 00:14:53,698 Stage-1 map = 96%,  reduce = 0%, Cumulative CPU 556.05 sec
-2019-02-12 00:14:54,726 Stage-1 map = 100%,  reduce = 0%, Cumulative CPU 558.13 sec
-MapReduce Total cumulative CPU time: 9 minutes 18 seconds 130 msec
-Ended Job = job_1547750003855_3042
-Stage-4 is selected by condition resolver.
-Stage-3 is filtered out by condition resolver.
-Stage-5 is filtered out by condition resolver.
-Moving data to directory hdfs://nameservice1/user/sshepard/data/.hive-staging_hive_2019-02-12_00-13-49_265_4663904795520879897-1/-ext-10000
-Loading data to table default.chicago_crimes
-MapReduce Jobs Launched:
-Stage-Stage-1: Map: 10   Cumulative CPU: 558.13 sec   HDFS Read: 2828222664 HDFS Write: 2458770205 HDFS EC Read: 0 SUCCESS
-Total MapReduce CPU Time Spent: 9 minutes 18 seconds 130 msec
-OK
-Time taken: 68.405 seconds
 ```
 
 ## Question 3
@@ -174,7 +73,7 @@ What are earliest and most recent dates of the crimes recorded in the dataset an
 The earliest time in this dataset is 1/1/2001
 
 ```
-hive> select min(occurred_at) from crimes2;
+hive> select min(occurred_at) from crimes;
 Query ID = sshepard_20190211222658_17c2914a-2eb5-46d6-88e8-e7a25f90f838
 Total jobs = 1
 Launching Job 1 out of 1
