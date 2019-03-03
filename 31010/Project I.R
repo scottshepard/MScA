@@ -94,3 +94,76 @@ sample1=rnorm(100)
 sample2=rnorm(100,1,2)
 Cum.Distr.Functions <- data.frame(sample1,sample2)
 ecdfplot(~ sample1 + sample2, data=Cum.Distr.Functions, auto.key=list(space='right'))
+
+ks.test(sample1,sample2)
+
+ks.test(sample1,"pnorm",mean=0,sd=1)
+
+ks.test(sample2,"pnorm",mean=0,sd=1)
+
+counting_process$Time
+
+fitExp <- MASS::fitdistr(counting_process$Time, "exponential")
+KSTest_event_intervals <- ks.test(counting_process$Time, "pexp", rate=fitExp$estimate)
+c(KSTest_event_intervals$statistic,p.value=KSTest_event_intervals$p.value)
+
+plot(ecdf(diff(counting_process$Time)),
+     ylab="CDF",xlab="Time Intervals", 
+     main="ECDF")
+
+# Fit 5 candidates for distribution to event_indensities
+event_intensities = minute_data$count
+hist(event_intensities)
+
+# Normal
+fit.norm = MASS::fitdistr(event_intensities, densfun='normal')
+ks.test(event_intensities,"pnorm",mean=fit.norm$estimate[1],sd=fit.norm$estimate[2])
+# D = 0.15707, p-value = 8.78e-06
+
+# Exponential
+fit.exp = MASS::fitdistr(event_intensities, densfun = "exponential")
+ks.test(event_intensities, "pexp", rate = fit.exp$estimate)
+# D = 0.17956, p-value = 1.996e-07
+
+# Gamma
+fit.gam = MASS::fitdistr(event_intensities, densfun="gamma")
+ks.test(event_intensities, "pgamma", shape=fit.gam$estimate[1], rate=fit.gam$estimate[2])
+# D = 0.076201, p-value = 0.1097
+
+# Log Normal
+fit.lognorm = MASS::fitdistr(event_intensities, densfun = "lognormal")
+ks.test(event_intensities, "plnorm", meanlog=fit.lognorm$estimate[1], sdlog=fit.lognorm$estimate[2])
+# D = 0.12003, p-value = 0.001488
+
+# Logistic
+fit.logit = MASS::fitdistr(event_intensities, densfun="logistic")
+ks.test(event_intensities, "plogis", location=fit.logit$estimate[1], scale=fit.logit$estimate[2])
+# D = 0.10735, p-value = 0.006287
+
+# Fit the same five candidates on temperature
+temps = minute_data$temperature
+
+# Normal
+fit.norm = MASS::fitdistr(temps, densfun='normal')
+ks.test(temps,"pnorm",mean=fit.norm$estimate[1],sd=fit.norm$estimate[2])
+# D = 0.041953, p-value = 0.7711
+
+# Exponential
+fit.exp = MASS::fitdistr(temps, densfun = "exponential")
+ks.test(temps, "pexp", rate = fit.exp$estimate)
+# D = 0.57975, p-value < 2.2e-16
+
+# Gamma
+fit.gam = MASS::fitdistr(temps, densfun="gamma")
+ks.test(temps, "pgamma", shape=fit.gam$estimate[1], rate=fit.gam$estimate[2])
+# D = 0.048746, p-value = 0.5924
+
+# Log Normal
+fit.lognorm = MASS::fitdistr(temps, densfun = "lognormal")
+ks.test(temps, "plnorm", meanlog=fit.lognorm$estimate[1], sdlog=fit.lognorm$estimate[2])
+# D = 0.052065, p-value = 0.5069
+
+# Logistic
+fit.logit = MASS::fitdistr(temps, densfun="logistic")
+ks.test(temps, "plogis", location=fit.logit$estimate[1], scale=fit.logit$estimate[2])
+# D = 0.038929, p-value = 0.8431
