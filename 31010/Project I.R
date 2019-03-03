@@ -39,5 +39,49 @@ dim(minute_data)
 minute_data[67,]
 
 # Step 2
-m1 <- glm(count ~ temperature, data=minute_data, family=poisson())
-summary(m1)
+# Analysis of overdispersion
+# Use three different methods to analyze dispersion
+m1 <- glm(count ~ minute, data=minute_data, family=poisson())
+
+# Method 1 - CI based on deviance & dof
+ci_chisq <- function(model) {
+  deviance = summary(model)$deviance
+  dof = summary(model)$df.residual
+  qchisq(c(.025,.975), df=dof, lower.tail=FALSE)
+}
+summary(m1)$deviance
+ci_chisq(m1)
+# The deviance far outside the confidence interval for Chi-Squared
+
+# Method 2 - Regression Test
+AER::dispersiontest(m1)
+# The dispersion test shows the same thing the CI test did, p-value is small
+# enought to reject the null. True dispersion is greater than 1.
+
+# Method 3 - Test Against Neg Binom
+m1.nb <- MASS::glm.nb(count ~ minute, data=minute_data)
+pscl::odTest(m1.nb)
+# Again, p-value is very small. Data cannot be described by Poisson.
+
+
+# Step 2 Quiz
+# Repeat three over-dispersion tests above on new data
+test_dat <- read.table(paste(dataPath,'MScA_LinearNonlinear_step2_sample.csv',sep = '/'), header=TRUE)
+test_dat$minute <- as.numeric(row.names(test_dat))
+
+m2 <- glm(count ~ minute, data=test_dat, family=poisson())
+summary(m2)$deviance
+ci_chisq(m2)
+# Deviance: 578.6287
+# Lower Limit: 438.0601
+# Upper Limit: 561.7274
+
+AER::dispersiontest(m2)
+# test stat: 2.0338
+# p-value: 0.02099
+
+m2.nb <- MASS::glm.nb(count ~ minute, data=test_dat)
+pscl::odTest(m2.nb)
+# test stat: 4.7795
+# p-value: 0.0144
+
