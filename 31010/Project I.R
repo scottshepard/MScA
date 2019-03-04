@@ -167,3 +167,9 @@ ks.test(temps, "plnorm", meanlog=fit.lognorm$estimate[1], sdlog=fit.lognorm$esti
 fit.logit = MASS::fitdistr(temps, densfun="logistic")
 ks.test(temps, "plogis", location=fit.logit$estimate[1], scale=fit.logit$estimate[2])
 # D = 0.038929, p-value = 0.8431
+
+fit.intensity.gam = MASS::fitdistr(event_intensities, densfun="gamma")
+fit.temp.norm = MASS::fitdistr(temps, densfun='normal')
+distrParam <- list(intensity=fit.intensity.gam, temperature=fit.temp.norm)
+
+write.csv(minute_data,file=paste(dataPath,"OneMinuteCountsTemps.csv",sep="/"),row.names=FALSE)
