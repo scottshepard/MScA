@@ -10,6 +10,7 @@ install.packages(
     "rgl",
     
     # Statistical Models
+    "faraway",
     "MASS",
     "AER",
     "pscl",
