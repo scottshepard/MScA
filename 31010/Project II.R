@@ -184,3 +184,12 @@ res <- list(anomalies_temperature = anomalies$temperature,
 )
 
 saveRDS(res, file = paste(dataPath,'result2.rds',sep = '/'))
+
+# Step 6 - Count Regression
+poission.model <- glm(intensity ~ temperature, family=poisson(link='log'), data=part2_data)
+summary(poission.model)$deviance
+# 272.786, 248
+
+nb.model <- MASS::glm.nb(intensity ~ temperature, data=part2_data)
+summary(nb.model)$deviance
+# 272.761, 248, 97524
