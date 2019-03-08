@@ -1,0 +1,33 @@
+# set enviroment variables
+PROJECT_ID="big-data-project2"
+BUCKET="pyyelp-2"
+
+or
+export PROJECT_ID=big-data-project2;
+export CLUSTER_NAME=big-data-cluster;
+export HOSTNAME=big-data-cluster-m
+export ZONE=us-central1-c;
+export PORT=8888;
+
+gcloud auth login
+gcloud config set project $PROJECT_ID
+
+# list objects in bucket
+gsutil ls gs://$BUCKET
+
+gcloud dataproc clusters create $CLUSTER_NAME \
+    --project $PROJECT_ID \
+    --bucket $BUCKET \
+    --initialization-actions \
+        gs://dataproc-initialization-actions/jupyter/jupyter.sh
+
+
+# ssh connect to cloud
+gcloud compute config-ssh
+
+
+gcloud compute ssh ${HOSTNAME} \
+    --project=${PROJECT_ID} --zone=${ZONE}  -- \
+    -D 1080 -N
+
+gcloud dataproc clusters delete $CLUSTER_NAME
