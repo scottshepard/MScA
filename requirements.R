@@ -21,6 +21,7 @@ install.packages(
     "faraway",
     "caret",
     "relaimpo",
+    "lme4",
     
     # Randomness
     "randtests",
