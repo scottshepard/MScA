@@ -9,6 +9,9 @@ install.packages(
     "latticeExtra",
     "rgl",
     
+    # Animation
+    "animation",
+    
     # Statistical Models
     "faraway",
     "MASS",
@@ -18,10 +21,10 @@ install.packages(
     "nor1mix",
     "copula",
     "countreg",
-    "faraway",
     "caret",
     "relaimpo",
-    "lme4",
+    "lme4", # mixed effects
+    "depmixS4", # hidden markov models
     
     # Randomness
     "randtests",
