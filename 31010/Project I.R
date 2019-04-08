@@ -3,7 +3,7 @@ library(MASS)
 library(pscl)
 
 dataPath <- "~/Dropbox/MScA/31010 - Linear Non Linear/Course Project/"
-Course.Project.Data <- read.csv(file=paste(dataPath,"MScA_31010_LinearNonLinear_MalfunctionData.csv",sep="/"))
+Course.Project.Data <- read.csv(file=paste(dataPath,"MalfunctionData.csv",sep="/"))
 head(Course.Project.Data,10)
 
 # Step 1

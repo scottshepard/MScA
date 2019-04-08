@@ -17,14 +17,17 @@ install.packages(
     "MASS",
     "AER",
     "pscl",
-    "mclust",
-    "nor1mix",
     "copula",
     "countreg",
     "caret",
     "relaimpo",
     "lme4", # mixed effects
     "depmixS4", # hidden markov models
+    "kohonen", # self organizing maps
+    
+    # Clustering
+    "mclust",
+    "nor1mix",
     
     # Randomness
     "randtests",
