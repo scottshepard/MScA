@@ -1,0 +1,54 @@
+# set enviroment variables
+PROJECT_ID="big-data-project2"
+BUCKET="pyyelp-2"
+
+or
+export PROJECT_ID=big-data-project2;
+export CLUSTER_NAME=big-data-cluster;
+export HOSTNAME=big-data-cluster-m
+export ZONE=us-central1-c;
+export PORT=8888;
+export BUCKET=pyyelp-2
+
+gcloud auth login
+gcloud config set project $PROJECT_ID
+
+# create bucket
+gsutil mb gs://$BUCKET
+
+# list objects in bucket
+gsutil ls gs://$BUCKET
+
+# Copy objects to bucket -- only need to do once
+gsutil -m cp -R ~/Datasets/yelp_dataset_backup/ gs://$BUCKET
+
+# Copy backup data to make ready for import
+gsutil -m cp -R gs://$BUCKET/yelp_dataset_backup gs://$BUCKET/yelp_dataset
+gsutil mv -v gs://$BUCKET/yelp_dataset/yelp_dataset_backup/* gs://$BUCKET/yelp_dataset
+
+# Copy script into bucket
+gsutil -m cp ~/code/MScA/31013/project/pyyelp_create_database.hql gs://$BUCKET/pyyelp_create_database.hql
+
+# Create a dataproc cluster
+gcloud dataproc clusters create $CLUSTER_NAME \
+    --project $PROJECT_ID \
+    --bucket $BUCKET \
+    --initialization-actions \
+        gs://dataproc-initialization-actions/jupyter/jupyter.sh
+
+# ssh connect to cloud
+gcloud compute config-ssh
+ssh big-data-cluster-m.us-central1-c.big-data-project2
+
+# Copy hive script over from BUCKET
+gsutil cp gs://pyyelp-2/pyyelp_create_database.hql ./
+
+# Copy jar over
+gsutil cp gs://pyyelp-2/yelp_dataset/json-serde-1.3.8-jar-with-dependencies-hdp23.jar ./
+gsutil cp gs://pyyelp-2/yelp_dataset/json-serde-1.3.8-jar-with-dependencies-cdh5.jar ./
+
+# Run create table script
+hive -f pyyelp_create_database.hql
+
+# Shut down the dataproc cluster
+gcloud dataproc clusters delete $CLUSTER_NAME
