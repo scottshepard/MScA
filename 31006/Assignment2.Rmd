@@ -1,0 +1,21 @@
+---
+title: "31006: Assignment2"
+author: "Scott Shepard"
+date: "4/11/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Istanbul Timeseries Exploration
+
+```{r data}
+library(xts)
+
+df <- read.csv("~/Datasets/TS regression - data_akbilgic.csv")
+df$date <- as.Date(as.character(df$date), format='%d-%b-%y')
+
+x <- xts(df$ISE, as.Date(df$date), frequency=365)
+```
