@@ -9,11 +9,20 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Istanbul Timeseries Exploration
+# Istanbul Timeseries Exploration
+
+Prompt:
+1. Determine if all the TS are stationary 
+   a. qualitatively
+   b. quantitatively
+2. Linearly regress ISE against the remaining 5 stock index returns - determine which coefficients are significant
+3. For the non-significant coefficients, continue to lag by 1 day until all coefficients are significant - how many lags are needed?
+4. Concept question - what do you find in #1 and why?
 
 ```{r packages}
+library(zoo)
 library(xts)
-library(tseries)
+suppressMessages(library(tseries))
 ```
 
 ```{r data}
@@ -28,6 +37,13 @@ NIKKEI <- xts(df$NIKKEI, df$date)
 BOVESPA <- xts(df$BOVESPA, df$date)
 ```
 
+## 1a. Determine if all the TS are stationary - Qualitative
+
+The first step to both data exploration and determing if a time series is
+stationary is to plot it. I'm plotting all six time series here. A stationary
+time series will have an unchanging mean and should look stable, that is with
+no upward or downward trend.
+
 ```{r ts_plots}
 par(mfrow=c(3,2))
 plot(ISE)
@@ -38,6 +54,99 @@ plot(NIKKEI)
 plot(BOVESPA)
 ```
 
+Visually all of these time series look stationary. None of them have an 
+obvious trend. They are all more or less centered at 0 (not important for the
+mean to be 0 but it is nice). I would say, qualitatively at least, that these
+time series are stationary.
+
+## 1.b Determine of all the TS are stationary -- quantitatively
+
+One tool in our disposal for determining is a time series is stationary is the 
+`kpss.test()` function. The KPSS test tests against the alternative that the 
+series has a unit root. If a series has a unit root, it is has a stochastic 
+trend that is unpredictable. In the KPSS test, if the p-value is large then the
+null is accepted. Since the unit root is the alternative hypothesis, a low p-value
+means that the time series is stationary, or at least there isn't enough evidence
+to conclude that it is not stationary.
+
+```{r}
+library(tseries)
+
+kpss.test(ISE)
+kpss.test(SP)
+kpss.test(DAX)
+kpss.test(FTSE)
+kpss.test(NIKKEI)
+kpss.test(BOVESPA)
+```
+
+None of the KPSs levels are large enough to reject the null hypothesis,  
+i.e. all these trends are stationary.
+
+
+## 2. Linear Regression
+
+Linearly regress ISE against remianing 5 stock index returns and determin
+which coefficients are significant.
+
 ```{r}
 fit <- lm(ISE ~ ., data=df[,-1])
+
+summary(fit)
 ```
+
+DAX, FTSE, and NIKKEI are significant coefficients. BOVESPA is significant 
+at a 0.1 level so we won't count that one. SP is not significant at all.
+
+About half the variance is explained by the regression model.
+
+Explore the fitted model a bit.
+
+```{r}
+library(dplyr)
+library(reshape2)
+library(ggplot2)
+
+df$ISE_fitted <- y_hat <- predict(fit)
+
+melt(df, id.vars=('date'), measure.vars=c('ISE', 'ISE_fitted')) %>% 
+  ggplot(aes(x=date, y=value, color=variable)) + geom_point()
+
+ggplot(df, aes(x=ISE, y=ISE_fitted)) + geom_point()
+
+par(mfrow=c(2,1))
+plot(fit$residuals)
+
+hist(fit$residuals)
+```
+
+The fit is decent. The residuals show no pattern and are normally distributed.
+Plotting the real vs fitted values shows a very clear linear pattern but the 
+overall scatter shows a lot of variance that is not captured. 
+
+## 3. Lag Non-Significant Coefficients
+
+We can improve the model by lagging the non-significant coefficients until 
+they become sigfificant.
+
+```{r}
+library(DataCombine)
+
+lag = 1
+df_slide = slide(df, Var='SP', TimeVar='date', NewVar=paste0('SP_', lag), slideBy=-lag)
+drops = c('date', 'ISE_fitted', 'SP')
+summary(lm(ISE ~ ., data=df_slide[,!names(df_slide) %in% drops]))
+```
+
+A single day lag on SP brings the two non-significant coefficients into 
+significance. I tested other combinations that also worked, like two days on SP
+and one day on BOVESPA, but simplier is usually better when two models achieve
+the same results.
+
+## 4. What do you find in #1 and why?
+
+In part 1 I found that all the timeseries were stationary. They are return 
+indexes which means it's the daily return from open to close (or maybe from 
+close the previous day). I'm rather surprised that they are all stationary 
+as there should be a definite upward trend in daily return from 2009-2010. 
+Maybe this is already trend corrected data?
