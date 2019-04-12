@@ -11,11 +11,33 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Istanbul Timeseries Exploration
 
-```{r data}
+```{r packages}
 library(xts)
+library(tseries)
+```
 
+```{r data}
 df <- read.csv("~/Datasets/TS regression - data_akbilgic.csv")
 df$date <- as.Date(as.character(df$date), format='%d-%b-%y')
 
-x <- xts(df$ISE, as.Date(df$date), frequency=365)
+ISE  <- xts(df$ISE, df$date)
+SP   <- xts(df$SP,  df$date)
+DAX  <- xts(df$DAX, df$date)
+FTSE <- xts(df$FTSE, df$date)
+NIKKEI <- xts(df$NIKKEI, df$date)
+BOVESPA <- xts(df$BOVESPA, df$date)
+```
+
+```{r ts_plots}
+par(mfrow=c(3,2))
+plot(ISE)
+plot(SP)
+plot(DAX)
+plot(FTSE)
+plot(NIKKEI)
+plot(BOVESPA)
+```
+
+```{r}
+fit <- lm(ISE ~ ., data=df[,-1])
 ```
