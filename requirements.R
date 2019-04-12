@@ -36,7 +36,8 @@ install.packages(
     
     # Timeseries
     "zoo",
-    "xts"
+    "xts",
+    "tseries"
   ),
   repos='http://cran.us.r-project.org'
 )
