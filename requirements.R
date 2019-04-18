@@ -2,6 +2,7 @@ install.packages(
   c(
     # Data Manipulation
     "dplyr",
+    "DataCombine",
     
     # Plotting
     "ggplot2",
