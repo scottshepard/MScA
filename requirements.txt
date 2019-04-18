@@ -9,3 +9,7 @@ matplotlib
 keras
 tensorflow
 sklearn
+
+# NLP
+nltk
+textblob

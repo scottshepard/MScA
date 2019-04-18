@@ -2,6 +2,7 @@ install.packages(
   c(
     # Data Manipulation
     "dplyr",
+    "DataCombine",
     
     # Plotting
     "ggplot2",
@@ -35,7 +36,9 @@ install.packages(
     "random",
     
     # Timeseries
-    "zoo"
+    "zoo",
+    "xts",
+    "tseries"
   ),
   repos='http://cran.us.r-project.org'
 )
