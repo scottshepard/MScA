@@ -3,6 +3,7 @@ install.packages(
     # Data Manipulation
     "dplyr",
     "DataCombine",
+    "xlsx",
     
     # Plotting
     "ggplot2",
