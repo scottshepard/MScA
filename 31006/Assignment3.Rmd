@@ -1,0 +1,38 @@
+---
+title: "31006: Assignment 3"
+subtitle: "ARIMA Modeling"
+author: "Scott Shepard"
+date: "4/11/2019"
+output: html_document
+---
+
+# Prompt
+
+**ARIMA modeling:**
+
+1. Use datasets from 1955 to 1968 to build an ARMA or ARIMA models for UN and GDP. Use auto.arima() from package forecast.  
+2. Justify why you chose (ARMA or ARIMA) one over the other.  Note there will be 2 models, one for UN and another for GDP.
+3. Use the chosen UN and GDP models to forecast the UN and the GDP for 1969. Use forecast() from package forecast
+4. Compare your forecasts with the actual values using error = actual - estimate and plot the errors.
+5. Calculate the sum of squared error for each UN and GDP models.
+
+**Regression - build regression models that use:**
+
+1. UN as the independent variable and GDP as the dependent variable - use data from 1955 to 1968 to build the model. Forecast for 1969 and plot the errors as a percentage of the mean. Also calculate the sum of squared(error) as a percentage of the mean.
+2. GDP as the independent variable and UN as the dependent variable - use data from 1955 to 1968 to build the model.  Forecast for 1969 and plot the errors as a percentage of the mean. Also calculate the sum of squared(error) as a percentage of the mean of the actual values.
+3. Compare the 2 models using the sum of squared error as a percentage of the mean of the actual values - any reason to believe which should be the independent and the dependent variable ?
+
+# Setup & Data Loading
+
+
+
+```{r}
+library(xlsx)
+df <- xlsx::read.xlsx("~/Datasets/31006/Unemployment_GDP_UK.xlsx", 1)
+
+df$Year
+```
+
+# ARIMA Modeling
+
+
