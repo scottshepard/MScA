@@ -24,15 +24,99 @@ output: html_document
 
 # Setup & Data Loading
 
-
-
 ```{r}
 library(xlsx)
+
 df <- xlsx::read.xlsx("~/Datasets/31006/Unemployment_GDP_UK.xlsx", 1)
 
-df$Year
+for( i in 2:nrow(df)) {
+  if(is.na(df$Year[i])) {
+    df$Year[i] <- df$Year[i-1]
+  }
+}
+
+head(df)
 ```
 
 # ARIMA Modeling
+
+```{r}
+library(zoo)
+library(xts)
+
+quarters <- zoo::as.yearqtr(paste(df$Year, df$Quarter, sep="-"))
+
+UN  <- xts::as.xts(df$UN,  order.by=quarters)
+GDP <- xts::as.xts(df$GDP, order.by=quarters)
+
+par(mfrow=c(2,1))
+xts::plot.xts(UN)
+xts::plot.xts(GDP)
+```
+
+## 1. Build ARMA/ARIMA Models for UN & GDP for 1955-1968
+
+```{r, message=FALSE}
+library(forecast)
+
+UN_arima <- forecast::auto.arima(UN['1955/1968'])
+GDP_arima <- forecast::auto.arima(GDP['1955/1968'])
+
+summary(UN_arima)
+summary(GDP_arima)
+```
+
+## 2. Justify choice of ARMA or ARIMA
+
+The I in ARIMA stands for integrated. It's used to difference the dataset 
+first before applying an ARMA model. ARIMA models are useful when working on non-stationary time series. Both the GDP and UN time series are both 
+non-stationary so using an ARIMA model instead of an ARMA model is 
+appropriate.
+
+```{r, message=FALSE, warning=FALSE}
+library(tseries)
+
+tseries::kpss.test(UN)
+tseries::kpss.test(GDP)
+```
+
+The KPSS levels are both high enough to reject the null and accept the 
+alternate that these series as non-stationary.
+
+## 3. Forest UN & GDP for 1969
+
+```{r, fig.width=12, fig.height=8}
+UN_1969_forecast  <- forecast(UN_arima, h=4)
+GDP_1969_forecast <- forecast(GDP_arima, h=4)
+
+UN_1969_forecast
+GDP_1969_forecast
+
+par(mfrow=c(2,1))
+plot(UN_1969_forecast)
+plot(GDP_1969_forecast)
+```
+
+## 4. Compare forecasts with the actual values and plot errors
+
+```{r}
+UN_error  <- UN['1969']  - data.frame( UN_1969_forecast)$Point.Forecast
+GDP_error <- GDP['1969'] - data.frame(GDP_1969_forecast)$Point.Forecast
+
+par(mfrow=c(2,1))
+plot(UN_error)
+plot(GDP_error)
+```
+
+## 5. Calcuate sum of squared error for each model
+
+```{r}
+sum(UN_error^2)
+sum(GDP_error^2)
+```
+
+
+
+
 
 
