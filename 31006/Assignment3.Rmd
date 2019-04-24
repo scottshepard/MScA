@@ -11,23 +11,23 @@ output: html_document
 **ARIMA modeling:**
 
 1. Use datasets from 1955 to 1968 to build an ARMA or ARIMA models for UN and GDP. Use auto.arima() from package forecast.  
-2. Justify why you chose (ARMA or ARIMA) one over the other.  Note there will be 2 models, one for UN and another for GDP.
-3. Use the chosen UN and GDP models to forecast the UN and the GDP for 1969. Use forecast() from package forecast
-4. Compare your forecasts with the actual values using error = actual - estimate and plot the errors.
+2. Justify why you chose (ARMA or ARIMA) one over the other.  Note there will be 2 models, one for UN and another for GDP.  
+3. Use the chosen UN and GDP models to forecast the UN and the GDP for 1969. Use forecast() from package forecast  
+4. Compare your forecasts with the actual values using error = actual - estimate and plot the errors.  
 5. Calculate the sum of squared error for each UN and GDP models.
 
 **Regression - build regression models that use:**
 
-1. UN as the independent variable and GDP as the dependent variable - use data from 1955 to 1968 to build the model. Forecast for 1969 and plot the errors as a percentage of the mean. Also calculate the sum of squared(error) as a percentage of the mean.
-2. GDP as the independent variable and UN as the dependent variable - use data from 1955 to 1968 to build the model.  Forecast for 1969 and plot the errors as a percentage of the mean. Also calculate the sum of squared(error) as a percentage of the mean of the actual values.
-3. Compare the 2 models using the sum of squared error as a percentage of the mean of the actual values - any reason to believe which should be the independent and the dependent variable ?
+1. UN as the independent variable and GDP as the dependent variable - use data from 1955 to 1968 to build the model. Forecast for 1969 and plot the errors as a percentage of the mean. Also calculate the sum of squared(error) as a percentage of the mean.  
+2. GDP as the independent variable and UN as the dependent variable - use data from 1955 to 1968 to build the model.  Forecast for 1969 and plot the errors as a percentage of the mean. Also calculate the sum of squared(error) as a percentage of the mean of the actual values.  
+3. Compare the 2 models using the sum of squared error as a percentage of the mean of the actual values - any reason to believe which should be the independent and the dependent variable ?  
 
-# Setup & Data Loading
+## Setup & Data Loading
 
 ```{r}
-library(xlsx)
+library(openxlsx)
 
-df <- xlsx::read.xlsx("~/Datasets/31006/Unemployment_GDP_UK.xlsx", 1)
+df <- read.xlsx("~/Datasets/31006/Unemployment_GDP_UK.xlsx", 1)
 
 for( i in 2:nrow(df)) {
   if(is.na(df$Year[i])) {
@@ -40,18 +40,18 @@ head(df)
 
 # ARIMA Modeling
 
-```{r}
+```{r, warning=FALSE}
 library(zoo)
 library(xts)
 
-quarters <- zoo::as.yearqtr(paste(df$Year, df$Quarter, sep="-"))
+quarters <- as.yearqtr(paste(df$Year, df$Quarter, sep="-"))
 
-UN  <- xts::as.xts(df$UN,  order.by=quarters)
-GDP <- xts::as.xts(df$GDP, order.by=quarters)
+UN  <- as.xts(df$UN,  order.by=quarters)
+GDP <- as.xts(df$GDP, order.by=quarters)
 
 par(mfrow=c(2,1))
-xts::plot.xts(UN)
-xts::plot.xts(GDP)
+plot.xts(UN)
+plot.xts(GDP)
 ```
 
 ## 1. Build ARMA/ARIMA Models for UN & GDP for 1955-1968
@@ -59,8 +59,8 @@ xts::plot.xts(GDP)
 ```{r, message=FALSE}
 library(forecast)
 
-UN_arima <- forecast::auto.arima(UN['1955/1968'])
-GDP_arima <- forecast::auto.arima(GDP['1955/1968'])
+UN_arima <- auto.arima(UN['1955/1968'])
+GDP_arima <- auto.arima(GDP['1955/1968'])
 
 summary(UN_arima)
 summary(GDP_arima)
@@ -76,8 +76,8 @@ appropriate.
 ```{r, message=FALSE, warning=FALSE}
 library(tseries)
 
-tseries::kpss.test(UN)
-tseries::kpss.test(GDP)
+kpss.test(UN)
+kpss.test(GDP)
 ```
 
 The KPSS levels are both high enough to reject the null and accept the 
@@ -114,6 +114,8 @@ plot(GDP_error)
 sum(UN_error^2)
 sum(GDP_error^2)
 ```
+
+# Regression
 
 
 
