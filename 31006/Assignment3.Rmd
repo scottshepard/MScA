@@ -3,7 +3,7 @@ title: "31006: Assignment 3"
 subtitle: "ARIMA Modeling"
 author: "Scott Shepard"
 date: "4/11/2019"
-output: html_document
+output: rmarkdown::github_document
 ---
 
 # Prompt
@@ -56,7 +56,7 @@ plot.xts(GDP)
 
 ## 1. Build ARMA/ARIMA Models for UN & GDP for 1955-1968
 
-```{r, message=FALSE, warnings=FALSE}
+```{r, message=FALSE, warning=FALSE}
 library(forecast)
 
 UN_arima <- auto.arima(UN['1955/1968'])
@@ -131,6 +131,8 @@ matplot(x=test$Quarter, y=test[,c("GDP", "GDP_pred")], type='l')
 ```
 
 ```{r}
+library(ggplot2)
+
 test$GDP_error <- test$GDP_pred - test$GDP
 test$GDP_error_pct <- test$GDP_error / mean(test$GDP)
 
