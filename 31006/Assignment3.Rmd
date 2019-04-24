@@ -40,7 +40,7 @@ head(df)
 
 # ARIMA Modeling
 
-```{r, warning=FALSE}
+```{r, message=FALSE}
 library(zoo)
 library(xts)
 
@@ -56,7 +56,7 @@ plot.xts(GDP)
 
 ## 1. Build ARMA/ARIMA Models for UN & GDP for 1955-1968
 
-```{r, message=FALSE}
+```{r, message=FALSE, warnings=FALSE}
 library(forecast)
 
 UN_arima <- auto.arima(UN['1955/1968'])
@@ -125,14 +125,55 @@ test <- df[df$Year == 1969,]
 
 m1 <- lm(GDP ~ UN, train)
 
-plot(test$GDP, predict(m1, newdata = test))
+test$GDP_pred <- predict(m1, newdata = test)
+
+matplot(x=test$Quarter, y=test[,c("GDP", "GDP_pred")], type='l')
 ```
 
-## 1. UN as dep. var and GDP as ind. var
+```{r}
+test$GDP_error <- test$GDP_pred - test$GDP
+test$GDP_error_pct <- test$GDP_error / mean(test$GDP)
 
+ggplot(test, aes(x=Quarter, y=GDP_error_pct)) + 
+  geom_bar(stat='identity') + 
+  geom_text(aes(label=paste0(round(GDP_error_pct*100, 1), '%')), vjust=-0.5, color="white") + 
+  labs(x='Quarter in 1969', y='Error as a % of Mean', title='GDP Regression Forecast')
+```
+
+```{r}
+sum(test$GDP_error^2) / mean(test$GDP)
+```
+
+## 2. UN as dep. var and GDP as ind. var
 
 ```{r}
 m2 <- lm(UN ~ GDP, train)
 
-predict(m2, newdata = test)
+test$UN_pred <- predict(m2, newdata = test)
+
+matplot(x=test$Quarter, y=test[,c("UN", "UN_pred")], type='l')
 ```
+
+```{r}
+test$UN_error <- test$UN_pred - test$UN
+test$UN_error_pct <- test$UN_error / mean(test$UN)
+
+ggplot(test, aes(x=Quarter, y=UN_error_pct)) + 
+  geom_bar(stat='identity') + 
+  geom_text(aes(label=paste0(round(UN_error_pct*100, 1), '%')), vjust=-0.5, color="white") + 
+  labs(x='Quarter in 1969', y='Error as a % of Mean', title='UN Regression Forecast')
+```
+
+```{r}
+sum(test$UN_error^2) / mean(test$UN)
+```
+
+## Which one is the dependent variable?
+
+UN unemployment did a better job of predicting GDP than GDP did of predicting
+UN unemployment. The sum or squared errors over the mean of actual values
+is lower. This might mean that unemployment is the independent
+variable and GDP the dependent variable. This would make sense as the fewer
+people out of work, the more stuff a country produces. However this is 
+really weak evidence that one or the other is the independent or dependent
+variable.
