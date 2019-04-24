@@ -117,8 +117,22 @@ sum(GDP_error^2)
 
 # Regression
 
+## 1. UN as ind. var and GDP as dep. var
+
+```{r}
+train <- df[df$Year < 1969,]
+test <- df[df$Year == 1969,]
+
+m1 <- lm(GDP ~ UN, train)
+
+plot(test$GDP, predict(m1, newdata = test))
+```
+
+## 1. UN as dep. var and GDP as ind. var
 
 
+```{r}
+m2 <- lm(UN ~ GDP, train)
 
-
-
+predict(m2, newdata = test)
+```
