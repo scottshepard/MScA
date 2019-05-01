@@ -1,0 +1,153 @@
+---
+title: "31006: Assignment 4"
+subtitle: "Seasonality with Traffic Flow"
+author: "Scott Shepard"
+date: "4/30/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Prompt
+
+The daily data is from Illinois Dept of Transporation (IDOT) for I80E 1EXIT 
+(the 2nd data column) - note each data point is an hourly count of the number 
+of vehicles at a specific location on I80E.
+
+Use the daily data for last 2 weeks of June 2013 to develop an 
+ARIMA forecasting model.
+
+Objective is to forecast the hourly counts for July 1.
+
+The actual data file for July 1 is included for you to test your estimate.
+
+**Part 1** - Use ARIMA(p,d,q) model to forecast. 
+Find the model returned by R `auto.arima()`. 
+Change the values of p and q and determine the best model using AICc and BIC. 
+Do AICc and BIC select the same model as the best model?
+
+**Part 2** - Use day of the week seasonal ARIMA(p,d,q)(P,Q,D)s model to 
+forecast for July 1 (which is a Monday) - note use the hourly data
+
+**Part 3** - Use hour of the day seasonal ARIMA (p,d,q)(P,D,Q)s model to 
+forecast for the hours 8:00, 9:00, 17:00 and 18:00 on July 1
+
+**Part 4** - For the July 1 8:00, 9:00, 17:00 and 18:00 forecasts, 
+which model is better (part 2 or part 3) ?
+
+## Part 0: Reading Data 
+
+```{r data, warning=FALSE, message=FALSE}
+library(gdata)
+library(stringr)
+
+base_path <- "~/Datasets/31006/1-57 Traffic/"
+
+date_parse_helper <- function(d) {
+  d <- str_replace_all(d, "I-57-|\\.xls", "")
+  as.Date(d, format = "%Y-%B-%d")
+}
+
+read_i57_xls <- function(base_path, file_name) {
+  df_ <- read.xls(file.path(base_path, file_name), skip=4, header=F, stringsAsFactors=F)
+  df_$date <- date_parse_helper(file_name)
+  df_$datetime <- as.POSIXct(paste(df_$date, df_[,3]), format="%Y-%m-%d %H:%M")
+  df_[1:24,]
+}
+
+df <- plyr::ldply(list.files(base_path), function(f) read_i57_xls(base_path, f))
+head(df[,1:10])
+```
+
+The field we are trying to forecast here is V5.
+
+```{r, message=FALSE}
+library(xts)
+
+time_index <- seq(from = as.POSIXct("2013-06-16 01:00"), 
+                  to = as.POSIXct("2013-07-01 00:00"), by = "hour")
+
+obs <- xts(df[df$date != '2013-07-01',5], order.by = time_index)
+
+plot(obs)
+```
+
+Data looks highly seasonal, a strong time-based component. Traffic is lowest
+around 2am, with a double peak during weekdays aroung 9am and 5pm, and a
+single peak on weekdays at midday. Visually, it looks like the hourly 
+compoment will be more important than the weekday component.
+
+## Part 1: ARIMA
+
+Use ARIMA(p,d,q) model to forecast. Find the model returned by R `auto.arima()`. 
+Change the values of p and q and determine the best model using AICc and BIC. 
+Do AICc and BIC select the same model as the best model?
+
+```{r}
+library(forecast)
+
+m0 <- auto.arima(obs)
+m1 <- Arima(obs, c(4,0,6))
+m2 <- Arima(obs, c(8,0,12))
+
+compare_models <- data.frame(m0[c('aic', 'bic', 'loglik')])
+names(compare_models) <- c('aic', 'bic', 'loglik')
+compare_models <- rbind(compare_models, data.frame(m1[c('aic', 'bic', 'loglik')]))
+compare_models <- rbind(compare_models, data.frame(m2[c('aic', 'bic', 'loglik')]))
+compare_models$model <- c('m0','m1','m2')
+compare_models
+```
+
+Using AIC and BIC alone do not give the same model as using `auto.arima`. AIC 
+continues to fall as more and more terms are added. BIC penalized additional
+terms and so increases again when the terms get too large, however even BIC
+prefered values of p and q higher than the "best" model. Even rerunning
+`auto.arima` with higher max p and q values yields the same answer.
+
+## Part 2: Day of Week Seasonality
+
+Use day of the week seasonal ARIMA(p,d,q)(P,Q,D)s model to forecast for July 1 
+(which is a Monday) - note use the hourly data
+
+```{r}
+dow_arima <- auto.arima(obs, seasonal = )
+forecast(m0, h=24)
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+

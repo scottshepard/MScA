@@ -2,8 +2,10 @@ install.packages(
   c(
     # Data Manipulation
     "dplyr",
+    "plyr",
     "DataCombine",
     "openxlsx",
+    "gdata",
     
     # Plotting
     "ggplot2",
