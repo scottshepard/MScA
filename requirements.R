@@ -3,6 +3,7 @@ install.packages(
     # Data Manipulation
     "dplyr",
     "DataCombine",
+    "openxlsx",
     
     # Plotting
     "ggplot2",
@@ -38,7 +39,8 @@ install.packages(
     # Timeseries
     "zoo",
     "xts",
-    "tseries"
+    "tseries",
+    "forecast"
   ),
   repos='http://cran.us.r-project.org'
 )
