@@ -13,3 +13,4 @@ sklearn
 # NLP
 nltk
 textblob
+regex
