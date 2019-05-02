@@ -3,7 +3,7 @@ title: "31006: Assignment 4"
 subtitle: "Seasonality with Traffic Flow"
 author: "Scott Shepard"
 date: "5/2/2019"
-output: html_document
+output: rmarkdown::github_document
 ---
 
 ```{r setup, include=FALSE}
