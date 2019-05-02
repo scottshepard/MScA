@@ -111,49 +111,91 @@ prefered values of p and q higher than the "best" model. Even rerunning
 
 ## Part 2: Day of Week Seasonality
 
-Use day of the week seasonal ARIMA(p,d,q)(P,Q,D)s model to forecast for July 1 
-(which is a Monday) - note use the hourly data
+Use day of the week seasonal ARIMA(p,d,q)(P,Q,D)s model to forecast for July 1
+
+I can force DOW seasonality on the training set by making the frequency 168, which is the number of hours in a week.
 
 ```{r}
 dow_arima <- auto.arima(ts(train, frequency = 168))
 dow_forecast <- forecast(dow_arima, h=24)
-dow_forecast
+
+dfp <- data.frame(hour=index(test),
+                  obs=test[,1], 
+                  dow=dow_forecast$mean)
+
+melt(dfp, id.vars = "hour") %>% 
+  ggplot(aes(x=hour, y=value, group=variable, color=variable)) + 
+  geom_point() + 
+  geom_line() +
+  ggtitle('Day of Week Seasonality')
 ```
 
+Overall the forecast using DOW looks pretty good. However there is a 
+weirdly large drop at 7pm. It's picking that up from the Monday
+before.
+
+## Part 3: Hour of Day Seasonality
+
+By setting the frequency to 24, we are telling the arima model that 
+there are 24 measurements in a period, and so it will look at the
+observations 24 steps in the past to consider seasonality.
 
 ```{r}
 hour_arima <- auto.arima(ts(train, frequency = 24))
-hourly_forecast <- forecast(hour_arima, h=24)
-hourly_forecast
+hod_forecast <- forecast(hour_arima, h=24)
+
+dfp <- data.frame(hour=index(test),
+                  obs=test[,1], 
+                  hod=hod_forecast$mean)
+
+melt(dfp, id.vars = "hour") %>% 
+  ggplot(aes(x=hour, y=value, group=variable, color=variable)) + 
+  geom_point() + 
+  geom_line() + 
+  ggtitle('Hour of Day Seasonality')
+```
+
+Hour of day doesn't have the huge drop that dow of week had, but
+it doesn't quite capute the rush of Monday morning traffic. It's 
+probably a bit smoothed out by the weekend mornings which aren't
+as intense.
+
+## Compare Seasonalities
+
+```{r}
+library(reshape2)
+library(ggplot2)
+
+
+dfp <- data.frame(hour=index(test),
+                  obs=test[,1], 
+                  hod=hourly_forecast$mean,
+                  dow=dow_forecast$mean, 
+                  row.names = NULL)
+
+melt(dfp, id.vars = "hour") %>% 
+  ggplot(aes(x=hour, y=value, group=variable, color=variable)) + 
+  geom_point() + 
+  geom_line() + 
+  ggtitle("Comparison of Seasonality")
 ```
 
 
 ```{r}
-matplot(index(test), cbind(test, data.frame(hourly_forecast)$Point.Forecast, data.frame(dow_forecast)$Point.Forecast))
-```
+rush_hours = as.POSIXct(
+  paste('2013-07-01', c('08:00:00', '09:00:00', '17:00:00', '18:00:00')))
 
+dfp$hod_error <- dfp$hod - dfp$obs
+dfp$dow_error <- dfp$dow - dfp$obs
+
+df_rush <- dfp[dfp$hour %in% rush_hours, ]
+df_rush
+```
 
 ```{r}
-
+sum(df_rush$hod_error^2)
+sum(df_rush$dow_error^2)
 ```
 
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
+The day-of-week seasonality model has a much lower SSE than the hour-of-day
+seasonality for the specific rush hours. That is a bit surprising to me but I supposed that the weekend non-rush hour times confuse the model too much.
