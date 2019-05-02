@@ -2,7 +2,7 @@
 title: "31006: Assignment 4"
 subtitle: "Seasonality with Traffic Flow"
 author: "Scott Shepard"
-date: "4/30/2019"
+date: "5/2/2019"
 output: html_document
 ---
 
@@ -39,10 +39,17 @@ which model is better (part 2 or part 3) ?
 
 ## Part 0: Reading Data 
 
-```{r data, warning=FALSE, message=FALSE}
+```{r packages, warning=FALSE, message=FALSE}
+library(reshape2)
+library(ggplot2)
 library(gdata)
 library(stringr)
+library(xts)
+library(forecast)
+library(zoo)
+```
 
+```{r data, warning=FALSE, message=FALSE}
 base_path <- "~/Datasets/31006/1-57 Traffic/"
 
 date_parse_helper <- function(d) {
@@ -64,8 +71,6 @@ head(df[,1:10])
 The field we are trying to forecast here is V5.
 
 ```{r, message=FALSE}
-library(xts)
-
 time_index <- seq(from = as.POSIXct("2013-06-16 01:00"), 
                   to = as.POSIXct("2013-07-02 00:00"), by = "hour")
 
@@ -88,9 +93,7 @@ Use ARIMA(p,d,q) model to forecast. Find the model returned by R `auto.arima()`.
 Change the values of p and q and determine the best model using AICc and BIC. 
 Do AICc and BIC select the same model as the best model?
 
-```{r}
-library(forecast)
-
+```{r, warning=FALSE}
 m0 <- auto.arima(train)
 m1 <- Arima(train, c(4,0,6))
 m2 <- Arima(train, c(8,0,12))
@@ -115,7 +118,7 @@ Use day of the week seasonal ARIMA(p,d,q)(P,Q,D)s model to forecast for July 1
 
 I can force DOW seasonality on the training set by making the frequency 168, which is the number of hours in a week.
 
-```{r}
+```{r, warning=FALSE}
 dow_arima <- auto.arima(ts(train, frequency = 168))
 dow_forecast <- forecast(dow_arima, h=24)
 
@@ -140,7 +143,7 @@ By setting the frequency to 24, we are telling the arima model that
 there are 24 measurements in a period, and so it will look at the
 observations 24 steps in the past to consider seasonality.
 
-```{r}
+```{r, warning=FALSE}
 hour_arima <- auto.arima(ts(train, frequency = 24))
 hod_forecast <- forecast(hour_arima, h=24)
 
@@ -162,14 +165,10 @@ as intense.
 
 ## Compare Seasonalities
 
-```{r}
-library(reshape2)
-library(ggplot2)
-
-
+```{r, warning=FALSE}
 dfp <- data.frame(hour=index(test),
                   obs=test[,1], 
-                  hod=hourly_forecast$mean,
+                  hod=hod_forecast$mean,
                   dow=dow_forecast$mean, 
                   row.names = NULL)
 
@@ -180,6 +179,9 @@ melt(dfp, id.vars = "hour") %>%
   ggtitle("Comparison of Seasonality")
 ```
 
+Comparing both plots on top of each other show the day-of-week seasonality
+outperforming the hour-of-day seasonality for most data-points until 7pm
+with that wild divergence.
 
 ```{r}
 rush_hours = as.POSIXct(
@@ -193,8 +195,7 @@ df_rush
 ```
 
 ```{r}
-sum(df_rush$hod_error^2)
-sum(df_rush$dow_error^2)
+c(sum(df_rush$hod_error^2), sum(df_rush$dow_error^2))
 ```
 
 The day-of-week seasonality model has a much lower SSE than the hour-of-day
