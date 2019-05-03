@@ -43,13 +43,18 @@ Calculate the MSE for 1990 - which of the two approaches give better result and 
 # Setup: Data & Packages
 
 ```{r, message=FALSE}
-library("TSA")
+library(TSA)
+library(xts)
+
 data(beersales)
+
+plot(as.xts(beersales))
 ```
 
 
 ```{r}
-
+train <- beersales['1975/1989']
+test <- beersales['1990']
 ```
 
 
