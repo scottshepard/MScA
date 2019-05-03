@@ -9,8 +9,42 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
+# Prompt
 
+Load data from TSA package (the package is written by authors Jonathan Cryer and Kung-Sik Chan).
+```
+> library("TSA")
+> data(beersales)
+```
+The data is the monthly beer sales in millions of barrels, 01/1975 - 12/1990.
+
+Train: 01/1975 - 12/1989.
+
+Test: 1990
+
+**Part 1**
+
+Use ARIMA(p,d,q) model to forecast beer sales for all months of 1990 using the following two multi-step forecasting approaches. For each model, check mean, autocorrelation and normality of the residuals. Confirm if the residuals are white noise.
+
+*1A* - Use the h-period in forecast() to forecast each month of 1990. This is also known as recursive forecasting where you fit a model only once and use it recursively for h-periods.
+
+*1B* - Use the monthly data as a continuous time series. Forecast for 1990 Jan, Plug forecast into the time series, build a new model to forecast for 1990 Feb. And so on and so forth. In other words, h=1 in all the forecasts. This is known as direct recursive (DirRec) forecasting where you fit a new model for each time step.
+
+*1C* - Plot the mean, the p-value of the autocorrelation test and the p-value of the normality test of the residuals of the 12 models.
+
+**Part 2**
+
+Plot the Recursive and DirRec along with the actuals. Use ylim=c(12.5, 17) to get a good visual of the plot differences.
+
+**Part 3**
+
+Calculate the MSE for 1990 - which of the two approaches give better result and why?
+
+# Setup: Data & Packages
+
+```{r, message=FALSE}
+library("TSA")
+data(beersales)
 ```
 
 
