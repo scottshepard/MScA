@@ -42,7 +42,8 @@ install.packages(
     "zoo",
     "xts",
     "tseries",
-    "forecast"
+    "forecast",
+    "TSA"
   ),
   repos='http://cran.us.r-project.org'
 )
