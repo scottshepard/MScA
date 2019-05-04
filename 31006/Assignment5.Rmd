@@ -58,8 +58,8 @@ plot(as.xts(beersales))
 ```{r}
 bs <- as.xts(beersales)
 
-train <- bs['1975/1989']
-test <- bs['1990']
+train <- window(beersales, end=c(1989,12))
+test <- window(beersales, start=1990)
 ```
 
 
@@ -69,28 +69,63 @@ Use default options to resurvively forecast for 1990
 
 ```{r}
 m <- auto.arima(train, seasonal = F)
+recursive_nonseasonal = forecast(m, h=12)
 plot(forecast(m, h=12))
 ```
 
 
 ```{r}
 m <- auto.arima(train)
+recursive_seasonal = forecast(m, h=12)
 plot(forecast(m, h=12))
 ```
 
+## 1B
 
 ```{r}
+train_adj <- train
+train_adj_s <- train
 
+m <- auto.arima(train_adj, seasonal = F) 
+m_s <- auto.arima(train_adj) 
+
+f_1990 <- c()
+f_1990s <- c()
+
+for( i in 1:12) {
+  print(i)
+  
+  pf <- forecast(m, h=1)$mean
+  pf_s <- forecast(m_s, h=1)$mean
+  
+  f_1990  <- c(f_1990,  pf)
+  f_1990s <- c(f_1990s, pf_s)
+  
+  train_adj   <- ts(c(train_adj,   pf),   start=1975, frequency=12)
+  train_adj_s <- ts(c(train_adj_s, pf_s), start=1975, frequency=12)
+  
+  m   <- auto.arima(train_adj, seasonal=F)
+  m_s <- auto.arima(train_adj) 
+}
+```
+
+```{r}
+df <- data.frame(
+  month = c(1:12), 
+  obs=test, 
+  DirRec=f_1990, 
+  DirRecS=f_1990s,
+  Rec = recursive_nonseasonal$mean,
+  RecS = recursive_seasonal$mean
+  )
+df
 ```
 
 
 ```{r}
-
-```
-
-
-```{r}
-
+melt(df, id.vars='month') %>% 
+  ggplot(aes(x=month, y=value, color=variable, group=variable)) + 
+  geom_line() + geom_point()
 ```
 
 
