@@ -40,11 +40,14 @@ Plot the Recursive and DirRec along with the actuals. Use ylim=c(12.5, 17) to ge
 
 Calculate the MSE for 1990 - which of the two approaches give better result and why?
 
-# Setup: Data & Packages
+# Part 1
+
+Plot beersales data, split into training and test.
 
 ```{r, message=FALSE}
 library(TSA)
 library(xts)
+library(forecast)
 
 data(beersales)
 
@@ -53,18 +56,26 @@ plot(as.xts(beersales))
 
 
 ```{r}
-train <- beersales['1975/1989']
-test <- beersales['1990']
+bs <- as.xts(beersales)
+
+train <- bs['1975/1989']
+test <- bs['1990']
+```
+
+
+## 1A - Recursive
+
+Use default options to resurvively forecast for 1990
+
+```{r}
+m <- auto.arima(train, seasonal = F)
+plot(forecast(m, h=12))
 ```
 
 
 ```{r}
-
-```
-
-
-```{r}
-
+m <- auto.arima(train)
+plot(forecast(m, h=12))
 ```
 
 
