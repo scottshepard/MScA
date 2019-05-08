@@ -44,7 +44,7 @@ Calculate the MSE for 1990 - which of the two approaches give better result and 
 
 Plot beersales data, split into training and test.
 
-```{r, message=FALSE}
+```{r, message=FALSE, warning=FALSE}
 library(TSA)
 library(xts)
 library(forecast)
@@ -68,61 +68,43 @@ test <- window(beersales, start=1990)
 Use default options to resurvively forecast for 1990
 
 ```{r}
-m <- auto.arima(train, seasonal = F)
-recursive_nonseasonal = forecast(m, h=12)
-plot(forecast(m, h=12))
-```
-
-
-```{r}
-m <- auto.arima(train)
-recursive_seasonal = forecast(m, h=12)
-plot(forecast(m, h=12))
+m1a <- auto.arima(train)
+Rec = forecast(m1a, h=12)
+plot(forecast(m1a, h=12))
 ```
 
 ## 1B
 
 ```{r}
 train_adj <- train
-train_adj_s <- train
-
-m <- auto.arima(train_adj, seasonal = F) 
-m_s <- auto.arima(train_adj) 
-
 f_1990 <- c()
-f_1990s <- c()
 
-for( i in 1:12) {
+for(i in 1:12) {
   print(i)
-  
-  pf <- forecast(m, h=1)$mean
-  pf_s <- forecast(m_s, h=1)$mean
-  
+  m1b <- auto.arima(train_adj)
+  pf <- forecast(m1b, h=1)$mean
   f_1990  <- c(f_1990,  pf)
-  f_1990s <- c(f_1990s, pf_s)
-  
-  train_adj   <- ts(c(train_adj,   pf),   start=1975, frequency=12)
-  train_adj_s <- ts(c(train_adj_s, pf_s), start=1975, frequency=12)
-  
-  m   <- auto.arima(train_adj, seasonal=F)
-  m_s <- auto.arima(train_adj) 
+  train_adj   <- ts(c(train_adj, pf), start=1975, frequency=12)
 }
 ```
 
-```{r}
+```{r, warning=FALSE, message=FALSE}
+library(dplyr)
+
 df <- data.frame(
   month = c(1:12), 
   obs=test, 
   DirRec=f_1990, 
-  DirRecS=f_1990s,
-  Rec = recursive_nonseasonal$mean,
-  RecS = recursive_seasonal$mean
+  Rec = Rec$mean
   )
 df
 ```
 
 
-```{r}
+```{r, warning=FALSE, message=FALSE}
+library(reshape2)
+library(ggplot2)
+
 melt(df, id.vars='month') %>% 
   ggplot(aes(x=month, y=value, color=variable, group=variable)) + 
   geom_line() + geom_point()
@@ -130,7 +112,16 @@ melt(df, id.vars='month') %>%
 
 
 ```{r}
+df <- df %>% mutate(
+    DirRecResid = DirRec - obs,
+    RecResid = Rec - obs
+  )
 
+df %>% 
+  select(month, DirRecResid, RecResid) %>%
+  melt(id.vars='month') %>%
+  ggplot(aes(x=month, y=value, fill=variable)) +
+  geom_bar(stat="identity", position="dodge")
 ```
 
 
