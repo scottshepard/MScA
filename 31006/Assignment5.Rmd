@@ -78,10 +78,12 @@ plot(forecast(m1a, h=12))
 ```{r}
 train_adj <- train
 f_1990 <- c()
+m1bs <- list()
 
 for(i in 1:12) {
   print(i)
   m1b <- auto.arima(train_adj)
+  m1bs[[i]] <- m1b
   pf <- forecast(m1b, h=1)$mean
   f_1990  <- c(f_1990,  pf)
   train_adj   <- ts(c(train_adj, pf), start=1975, frequency=12)
@@ -94,10 +96,10 @@ library(dplyr)
 df <- data.frame(
   month = c(1:12), 
   obs=test, 
-  DirRec=f_1990, 
-  Rec = Rec$mean
-  )
-df
+  Rec = Rec$mean,
+  DirRec=f_1990)
+
+head(df, 12)
 ```
 
 
