@@ -68,7 +68,10 @@ test <- window(beersales, start=1990)
 Use default options to resurvively forecast for 1990
 
 ```{r}
+start_time = Sys.time()
 m1a <- auto.arima(train)
+print(Sys.time() - start_time)
+
 Rec = forecast(m1a, h=12)
 plot(forecast(m1a, h=12))
 ```
@@ -80,14 +83,15 @@ train_adj <- train
 f_1990 <- c()
 m1bs <- list()
 
+start_time <- Sys.time()
 for(i in 1:12) {
-  print(i)
   m1b <- auto.arima(train_adj)
   m1bs[[i]] <- m1b
   pf <- forecast(m1b, h=1)$mean
   f_1990  <- c(f_1990,  pf)
   train_adj   <- ts(c(train_adj, pf), start=1975, frequency=12)
 }
+Sys.time() - start_time
 ```
 
 ```{r, warning=FALSE, message=FALSE}
@@ -97,23 +101,64 @@ df <- data.frame(
   month = c(1:12), 
   obs=test, 
   Rec = Rec$mean,
-  DirRec=f_1990)
+  DirRec=f_1990
+  ) %>% mutate(
+  DirRecResid = DirRec - obs,
+  RecResid = Rec - obs
+  )
 
 head(df, 12)
 ```
 
+## 1C
+
+Plot the mean, p-value of autocorrelation test, and p-value of the 
+normality test of the residuals of the 12 models.
+
+```{r}
+resid_df = plyr::ldply(m1bs, function(m) {
+  data.frame(
+    resid_mean = mean(m$residuals), 
+    autocor_pval = Box.test(m$residuals, type='Ljung-Box')$p.value,
+    noraml_pval = shapiro.test(m$residuals)$p.value
+  )
+})
+
+plot(resid_df$resid_mean, main="Mean of Residuals", xlab="Model #")
+plot(resid_df$autocor_pval, main="P-Value of Ljung-Box Autocorrelation Test of Residuals", xlab="Model #")
+plot(resid_df$noraml_pval, main="P-Value of Shapiro Wilk Normality Test of Residuals", xlab="Model #")
+```
+
+The mean of the residuals steadily approaches zero as the model number increases. This is good as it means that data is getting better and better.
+
+The p-value of the autocorrelation test steadily decreases with model number.
+However the p-values are so high I'm not sure it matters. The residuals are 
+not correlated and continue not to be correlated.
+
+The same happens with normality. The residuals are basically normal. Even if
+the p-values for the Shapiro-Wilk normality test are increasing, the 
+values are so small as to the movement to be negligent. One extra datapoint
+doesn't move the model very much.
+
+# Part 2
+
+Plot Recursive and DirRec along with the actuals.
 
 ```{r, warning=FALSE, message=FALSE}
 library(reshape2)
 library(ggplot2)
 
-melt(df, id.vars='month') %>% 
+df %>% 
+  select(month, obs, Rec, DirRec) %>% 
+  melt(id.vars='month') %>% 
   ggplot(aes(x=month, y=value, color=variable, group=variable)) + 
   geom_line() + geom_point()
 ```
 
+The Recursive and Direct Resursive preditions are so close as
+to not be visably different
 
-```{r}
+```{r, warning=FALSE, message=FALSE}
 df <- df %>% mutate(
     DirRecResid = DirRec - obs,
     RecResid = Rec - obs
@@ -126,69 +171,21 @@ df %>%
   geom_bar(stat="identity", position="dodge")
 ```
 
+Plotting the residuals shows way. While the models are technically 
+different, it's not by much. The seasonality picked up by the 
+auto.arima model is more powerful than including the extra 
+datapoints in direct resursive.
+
+# Part 3
+
+Calulate MSE.
 
 ```{r}
-
+c(mean(df$DirRecResid^2), mean(df$RecResid^2))
 ```
 
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
+The direct recursive method took much more time, 44.2 seconds compared to
+3.9 seconds and yielded a larger MSE. DirRec is a much more computationally 
+expensive process because you have to build as many models as periods 
+you want to forecast out. In this case, the extra computational time
+isn't worth the increase in accuracy, which is none. 
