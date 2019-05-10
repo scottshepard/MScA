@@ -1,0 +1,113 @@
+---
+title: "Assignment6"
+author: "Scott Shepard"
+date: "5/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Prompt
+
+Input gas rate - this is the independent variable
+
+Output gas CO2 % - this is the dependent variable that needs to be forecast
+
+Tasks:
+
+1. Use linear regression model - plot the ACF - what can you conclude ?
+2. Use ARIMA (0,0,1) model for the residuals. Adjust the Input gas rate and Output CO2 % with the MA coefficient. Combine with the linear regression model. Plot the residuals.
+3. Use ARIMA (1,0,0) model for the residuals. Adjust the Input gas rate and Output CO2 % with the AR coefficient. Combine with the linear regression model. Plot the residuals.
+4. Use ARIMA (0,0,2) model for the residuals. Adjust the Input gas rate and Output CO2 % with the MA coefficient. Combine with the linear regression model. Plot the residuals.
+5. Use ARIMA (2,0,0) model for the residuals. Adjust the Input gas rate and Output CO2 % with the AR coefficient. Combine with the linear regression model. Plot the residuals.
+6. Use ARIMA (2,0,2) model for the residuals. Adjust the Input gas rate and Output CO2 % with the AR and MA coefficients. Combine with the linear regression model. Plot the residuals.
+7. Use fractional ARIMA model (aka ARFIMA) for the output gas CO2% - plot the residuals, acf and pacf plots of the model. You can use an R package like fracdiff – be careful to determine which lag to choose when executing this test.
+8. Perform  Summaries,  Durbin-Watson and Box-Ljung tests for each model and build table to compare AICs, BICs and p-vaules for each test across the ARIMA and ARFIMA models.
+9. Based on ACF plots and test results, which ARIMA model gives the best result in terms of residuals being close to white noise ?
+
+## 1. Linear Regression
+
+```{r}
+df <- read.csv('~/Datasets/31006/Gas Furnace Dataset.csv')
+names(df) <- c('input', 'output')
+head(df)
+```
+
+
+```{r}
+m <- lm(output ~ input, data=df)
+
+acf(m$residuals)
+```
+
+Serious autocorrelation of the residuals at low lags.
+
+```{r}
+plot(m$residuals, type='l', main='Residuals of Linear Model')
+```
+
+It's very clear that there is information that the linear model is not 
+capturing.
+
+## 2. ARIMA (0,0,1) 
+
+```{r, message=FALSE}
+library(forecast)
+
+ma1 <- Arima(m$residuals, c(0,0,1))
+```
+
+## 3. ARIMA (1,0,0)
+
+```{r}
+
+```
+
+## 4. ARIMA (0,0,2)
+
+```{r}
+
+```
+
+## 5. ARIMA (2,0,0)
+
+```{r}
+
+```
+
+## 6. ARIMA (2,0,2)
+
+```{r}
+
+```
+
+## 7. Fractional ARIMA
+
+```{r}
+
+```
+
+## 8. Compare Models
+
+```{r}
+
+```
+
+## 9. Conclusions
+
+```{r}
+arma.innovation <- function(x, arma.model, ar.truncation=10) {
+  p <- arma.model$arma[1]
+  q <- arma.model$arma[2]
+  ar.coef <- arma.model$coef[seq_len(p)]
+  ma.coef <- arma.model$coef[p + seq_len(q)]
+  if (q == 0) {
+    infinite.ar.coef <- ar.coef
+  } else {
+    infinite.ar.coef <- -ARMAtoMA(-ma.coef, -ar.coef, ar.truncation)
+  }
+  return(as.vector(filter(x, c(1, -infinite.ar.coef), side=1)))
+}
+```
