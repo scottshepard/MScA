@@ -15,3 +15,4 @@ nltk
 textblob
 regex
 gensim
+pyLDAvis
