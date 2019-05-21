@@ -6,6 +6,7 @@ beautifulsoup4
 requests
 statsmodels
 matplotlib
+seaborn
 keras
 tensorflow
 sklearn
@@ -14,3 +15,5 @@ sklearn
 nltk
 textblob
 regex
+gensim
+pyLDAvis
