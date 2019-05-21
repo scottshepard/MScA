@@ -43,7 +43,8 @@ install.packages(
     "xts",
     "tseries",
     "forecast",
-    "TSA"
+    "TSA",
+    "prophet"
   ),
   repos='http://cran.us.r-project.org'
 )
