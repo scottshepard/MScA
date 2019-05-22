@@ -135,12 +135,17 @@ Arima(df$output, c(1,0,0), xreg = df$input)
 
 ```{r}
 plot(ar1$residuals, type='l')
+acf(ar1$residuals)
 ```
 
-Still not white noise.
+Still not white noise
 
 ```{r}
 Arima(ar1$residuals, c(1,0,0))
+```
+
+```{r}
+Arima(ar1$residuals, order=c(1,0,0))
 ```
 
 ## 5. ARIMA (2,0,0)
@@ -179,18 +184,7 @@ Try with an MA(1) model for the residuals.
 ```{r, message=FALSE}
 ma1 <- Arima(m$residuals, c(0,0,1))
 lm_ma1 <- lm(arma.innovation(df$output, ma1) ~ arma.innovation(df$input, ma1))
-lm_ma1
-resids <- adjust_residuals(df$input, df$output, lm_ma1$coefficients[1], lm_ma1$coefficients[2])
-
-ma1 <- Arima(resids, c(0,0,1))
-lm_ma1 <- lm(arma.innovation(df$output, ma1) ~ arma.innovation(df$input, ma1))
-lm_ma1
-resids <- adjust_residuals(df$input, df$output, lm_ma1$coefficients[1], lm_ma1$coefficients[2])
-
-ma1 <- Arima(resids, c(0,0,1))
-lm_ma1 <- lm(arma.innovation(df$output, ma1) ~ arma.innovation(df$input, ma1))
-lm_ma1
-resids <- adjust_residuals(df$input, df$output, lm_ma1$coefficients[1], lm_ma1$coefficients[2])
+acf(lm_ma1$residuals)
 ```
 
 ```{r}
