@@ -30,9 +30,16 @@ Tasks:
 ## 1. Linear Regression
 
 ```{r}
+library(ggplot2)
+library(forecast)
+
 df <- read.csv('~/Datasets/31006/Gas Furnace Dataset.csv')
 names(df) <- c('input', 'output')
-head(df)
+
+ggplot(df, aes(x=input, y=output)) + 
+  geom_point() + 
+  geom_smooth(method='lm') + 
+  ggtitle('Gas Furnace Data')
 ```
 
 
@@ -48,18 +55,152 @@ Serious autocorrelation of the residuals at low lags.
 plot(m$residuals, type='l', main='Residuals of Linear Model')
 ```
 
-It's very clear that there is information that the linear model is not 
-capturing.
+Since the residuals are clearly autocorrelated, the assumption about 
+non-correlated models are violated. The linear model coefficients can be
+adjusted by using the Cochrane-Orcutt process: fit an ARMA model to the 
+residuals, adjust X & Y by the coefficients of the model, refit and iterate
+until it converges.
+
+## 2. ARIMA (1,0,0)
+
+I'm going to do the autoregressive models first.
+
+The way to model errors using an autoregressive process is to:
+  1. Build a naive linear model
+  2. Model the residuals using AR(p)
+  3. Adjust x & y using AR coefficient by x'(t) = x(t) - b*x(t-1)
+  4. Run new linear model with x' and y'
+  5. Using new esimates and slope and intercept to adjust previous model by
+  new_slope = adjusted_slope and new_intercept = adjusted_intercept / (1-sum(AR_coef))
+  6. Repeat 2-5 until coefficients converge
+
+This is called the Cochrane-Orcutt process
+
+```{r}
+cochrane.orcutt <- function(x, y, order, iterations=10) {
+  linear.model <- lm(y ~ x)
+  res <- linear.model$residuals
+  
+  for(i in 1:iterations) {
+    coefs <- adjust_lm_coef(x, y, res, order)
+    res <- adjust_residuals(x, y, coefs[1], coefs[2])
+  }
+  
+  list("coefs"=coefs, "residuals"=res)
+}
+
+adjust_lm_coef <- function(x, y, resid, order) {
+  arma.model <- Arima(resid, order)
+  
+  xadj <- arma.innovation(x, arma.model)
+  yadj <- arma.innovation(y, arma.model)
+  
+  lm.adj <- lm(yadj ~ xadj)
+  
+  n <- length(coef(arma.model))
+  
+  intercept_adj <- lm.adj$coefficients[1] / (1-sum(arma.model$coef[1:(n-1)]))
+  slope_adj <- lm.adj$coefficients[2]
+  c(intercept_adj, slope_adj)
+}
+
+adjust_residuals <- function(x, y, intercept, slope) {
+  y - (intercept + x * slope)
+}
+
+arma.innovation <- function(x, arma.model, ar.truncation=10) {
+  p <- arma.model$arma[1]
+  q <- arma.model$arma[2]
+  ar.coef <- arma.model$coef[seq_len(p)]
+  ma.coef <- arma.model$coef[p + seq_len(q)]
+  if (q == 0) {
+    infinite.ar.coef <- ar.coef
+  } else {
+    infinite.ar.coef <- -ARMAtoMA(-ma.coef, -ar.coef, ar.truncation)
+  }
+  return(as.vector(filter(x, c(1, -infinite.ar.coef), side=1)))
+}
+```
+
+```{r}
+ar1 <- cochrane.orcutt(df$input, df$output, c(1,0,0))
+ar1$coefs
+```
+
+Compare to running an ARIMA with xreg
+
+```{r}
+Arima(df$output, c(1,0,0), xreg = df$input)
+```
+
+```{r}
+plot(ar1$residuals, type='l')
+```
+
+Still not white noise.
+
+```{r}
+Arima(ar1$residuals, c(1,0,0))
+```
+
+## 5. ARIMA (2,0,0)
+
+```{r}
+ar2 <- cochrane.orcutt(df$input, df$output, c(2,0,0))
+ar2$coefs
+```
+
+Compare to running ARIMA with xreg again.
+
+```{r}
+Arima(df$output, c(2,0,0), xreg = df$input)
+```
+
+Coefficients pretty much converged to the same value again!
+
+```{r}
+Arima(ar2$residuals, c(2,0,0))
+```
+
+AIC and BIC are slighly different with the two approaches even though 
+log likelihood is the same. One of them is probably doing an adjustment for 
+dropped values or something I would guess.
+
+```{r}
+library(nlme)
+mod.gls <- gls(output ~ input, data=df, correlation=corARMA(p=1), method="ML")
+summary(mod.gls)
+```
 
 ## 2. ARIMA (0,0,1) 
 
-```{r, message=FALSE}
-library(forecast)
+Try with an MA(1) model for the residuals.
 
+```{r, message=FALSE}
 ma1 <- Arima(m$residuals, c(0,0,1))
+lm_ma1 <- lm(arma.innovation(df$output, ma1) ~ arma.innovation(df$input, ma1))
+lm_ma1
+resids <- adjust_residuals(df$input, df$output, lm_ma1$coefficients[1], lm_ma1$coefficients[2])
+
+ma1 <- Arima(resids, c(0,0,1))
+lm_ma1 <- lm(arma.innovation(df$output, ma1) ~ arma.innovation(df$input, ma1))
+lm_ma1
+resids <- adjust_residuals(df$input, df$output, lm_ma1$coefficients[1], lm_ma1$coefficients[2])
+
+ma1 <- Arima(resids, c(0,0,1))
+lm_ma1 <- lm(arma.innovation(df$output, ma1) ~ arma.innovation(df$input, ma1))
+lm_ma1
+resids <- adjust_residuals(df$input, df$output, lm_ma1$coefficients[1], lm_ma1$coefficients[2])
 ```
 
-## 3. ARIMA (1,0,0)
+```{r}
+
+```
+
+```{r}
+Arima(df$output, c(0,0,1), xreg = df$input)
+```
+
 
 ```{r}
 
@@ -68,19 +209,25 @@ ma1 <- Arima(m$residuals, c(0,0,1))
 ## 4. ARIMA (0,0,2)
 
 ```{r}
+ma2 <- Arima(m$residuals, c(0,0,2))
 
-```
+df$input_ma2 <- adjust_input(df$input, coef(ma2)[1])
 
-## 5. ARIMA (2,0,0)
+lm_ma2 <- lm(output ~ input_ma2, data=df)
 
-```{r}
-
+plot(lm_ma2$residuals, type='l')
 ```
 
 ## 6. ARIMA (2,0,2)
 
 ```{r}
+ar2ma2 <- Arima(m$residuals, c(2,0,2))
 
+df$input_ar2 <- adjust_input(df$input, coef(ar2ma2)[1])
+
+lm_ar2 <- lm(output ~ input_ar2, data=df)
+
+plot(lm_ar2$residuals, type='l')
 ```
 
 ## 7. Fractional ARIMA
@@ -98,16 +245,5 @@ ma1 <- Arima(m$residuals, c(0,0,1))
 ## 9. Conclusions
 
 ```{r}
-arma.innovation <- function(x, arma.model, ar.truncation=10) {
-  p <- arma.model$arma[1]
-  q <- arma.model$arma[2]
-  ar.coef <- arma.model$coef[seq_len(p)]
-  ma.coef <- arma.model$coef[p + seq_len(q)]
-  if (q == 0) {
-    infinite.ar.coef <- ar.coef
-  } else {
-    infinite.ar.coef <- -ARMAtoMA(-ma.coef, -ar.coef, ar.truncation)
-  }
-  return(as.vector(filter(x, c(1, -infinite.ar.coef), side=1)))
-}
+
 ```
