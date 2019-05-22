@@ -1,0 +1,60 @@
+---
+title: "Project Data Exploration"
+author: "Scott Shepard"
+date: "5/21/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Packages
+
+```{r packages}
+library(ggplot2)
+```
+
+Read in the data and plot it whole
+
+```{r read_data}
+df <- read.csv('~/Datasets/31006/EVData.csv', stringsAsFactors=F)
+names(df)[2] <- "EV"
+df$Time <- as.POSIXct(df$Time, format = "%Y-%m-%d %H:%M:%S")
+
+ggplot(df, aes(x=Time, y=EV)) + geom_line()
+```
+
+The data is quite spiky. This might be tough to try to predict. Try zooming
+in on the first few days.
+
+```{r}
+ggplot(tail(df, 2000), aes(x=Time, y=EV)) + geom_line()
+```
+
+There _is_ a strong timeseries component. We just need to be able to distinguish
+it from the stochastic spikes.
+
+```{r}
+ggplot(head(df, 500), aes(x=Time, y=EV)) + geom_line()
+```
+
+Call every value above 2 as a "spike" and see if we can predict those just
+from the timeseries. 
+
+```{r}
+df$cars <- df$EV / 3.3
+
+
+
+```
+
+
+## Zero-Inflated Count Series
+
+```{r}
+dfz <- df
+
+
+```
+
