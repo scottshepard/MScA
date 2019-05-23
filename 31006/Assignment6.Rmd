@@ -2,7 +2,7 @@
 title: "Assignment6"
 author: "Scott Shepard"
 date: "5/10/2019"
-output: html_document
+output: rmarkdown::github_document
 ---
 
 ```{r setup, include=FALSE}
@@ -111,6 +111,10 @@ Plot the residuals.
 acf(linear_ma1$residuals)
 plot(linear_ma1$residuals, type='l')
 ```
+
+Durbin-Watson and Box-Ljung tests
+
+
 
 ## 3. ARIMA (1,0,0)
 
@@ -268,6 +272,7 @@ perhaps a combination of the two
 
 ```{r}
 ar2ma2 <- Arima(m$residuals, c(2,0,2))
+summary(ar2ma2)
 
 df$input_ar2ma2  <- arma.innovation(df$input, ar2ma2)
 df$output_ar2ma2 <- arma.innovation(df$output, ar2ma2)
@@ -285,7 +290,8 @@ Hey that's prety good! There's still significant autocorrelation at lag=1.
 ```{r}
 library(arfima)
 
-model.arfima <- arfima(z=df$output, order=c(2,0,2), xreg=data.frame(xreg=df$input))
+model.arfima <- arfima(z=df$output, order=c(2,0,2),
+                       xreg=data.frame(xreg=df$input))
 
 summary(model.arfima)
 ```
@@ -298,12 +304,97 @@ pacf(residuals(model.arfima)[[1]])
 
 ## 8. Compare Models
 
-```{r}
+For each model:
+1. Perform  Summaries,  
+2. Durbin-Watson and Box-Ljung tests 
+3. build table to compare AICs, BICs and p-vaules for each test
 
+```{r, message=FALSE}
+library(lmtest)
+
+summary(ma1)
+summary(linear_ma1)
+
+dwtest(linear_ma1)
+Box.test(linear_ma1$residuals, type='Ljung-Box')
+
+ma1_pvals = c(
+  dwtest(linear_ma1)$p.value, 
+  Box.test(linear_ma1$residuals, type='Ljung-Box')$p.value)
+```
+
+```{r, message=FALSE}
+summary(ar1)
+summary(linear_ar1)
+
+dwtest(linear_ar1)
+Box.test(linear_ar1$residuals, type='Ljung-Box')
+
+ar1_pvals = c(
+  dwtest(linear_ar1)$p.value, 
+  Box.test(linear_ar1$residuals, type='Ljung-Box')$p.value)
+```
+
+```{r, message=FALSE}
+summary(ma2)
+summary(linear_ma2)
+
+dwtest(linear_ma2)
+Box.test(linear_ma2$residuals, type='Ljung-Box')
+
+ma2_pvals = c(
+  dwtest(linear_ma2)$p.value, 
+  Box.test(linear_ma2$residuals, type='Ljung-Box')$p.value)
+```
+
+```{r, message=FALSE}
+summary(ar2)
+summary(linear_ar2)
+
+dwtest(linear_ar2)
+Box.test(linear_ar2$residuals, type='Ljung-Box')
+
+ar2_pvals = c(
+  dwtest(linear_ar2)$p.value, 
+  Box.test(linear_ar2$residuals, type='Ljung-Box')$p.value)
+```
+
+```{r, message=FALSE}
+summary(ar2ma2)
+summary(linear_ar2ma2)
+
+dwtest(linear_ar2ma2)
+Box.test(linear_ar2ma2$residuals, type='Ljung-Box')
+
+ar2ma2_pvals = c(
+  dwtest(linear_ar2ma2)$p.value, 
+  Box.test(linear_ar2ma2$residuals, type='Ljung-Box')$p.value)
+```
+
+```{r, message=FALSE}
+summary(model.arfima)
+
+Box.test(residuals(model.arfima)$Mode1, type='Ljung-Box')
+
+arfima_pvals = c(
+  NA, 
+  Box.test(linear_ar2ma2$residuals, type='Ljung-Box')$p.value)
+```
+
+
+```{r}
+t(data.frame(
+  ar1 = c(ar1$aic, ar1$bic, ar1_pvals),
+  ar2 = c(ar2$aic, ar2$bic, ar2_pvals),
+  ma1 = c(ma1$aic, ma1$bic, ma1_pvals),
+  ma2 = c(ma2$aic, ma2$bic, ma2_pvals),
+  ar2ma2 = c(ar2ma2$aic, ar2ma2$bic, ar2ma2_pvals),
+  arifma = c(AIC(model.arfima), BIC(model.arfima), arfima_pvals),
+  row.names = c('aic', 'bic', 'Durbin-Watson pval', 'Ljung-Box pval')
+))
 ```
 
 ## 9. Conclusions
 
-```{r}
-
-```
+From the ACF, summaries, AIC, and BIC, I think the fractional ARIMA model
+did the best job at capturing the residual time series information.
