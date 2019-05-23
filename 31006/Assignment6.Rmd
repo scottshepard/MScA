@@ -283,7 +283,17 @@ Hey that's prety good! There's still significant autocorrelation at lag=1.
 ## 7. Fractional ARIMA
 
 ```{r}
+library(arfima)
 
+model.arfima <- arfima(z=df$output, order=c(2,0,2), xreg=data.frame(xreg=df$input))
+
+summary(model.arfima)
+```
+
+```{r}
+plot(residuals(model.arfima)[[1]], type='l')
+acf(residuals(model.arfima)[[1]])
+pacf(residuals(model.arfima)[[1]])
 ```
 
 ## 8. Compare Models
