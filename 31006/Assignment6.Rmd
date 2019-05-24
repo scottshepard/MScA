@@ -1,0 +1,400 @@
+---
+title: "Assignment6"
+author: "Scott Shepard"
+date: "5/10/2019"
+output: rmarkdown::github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Prompt
+
+Input gas rate - this is the independent variable
+
+Output gas CO2 % - this is the dependent variable that needs to be forecast
+
+Tasks:
+
+1. Use linear regression model - plot the ACF - what can you conclude ?
+2. Use ARIMA (0,0,1) model for the residuals. Adjust the Input gas rate and Output CO2 % with the MA coefficient. Combine with the linear regression model. Plot the residuals.
+3. Use ARIMA (1,0,0) model for the residuals. Adjust the Input gas rate and Output CO2 % with the AR coefficient. Combine with the linear regression model. Plot the residuals.
+4. Use ARIMA (0,0,2) model for the residuals. Adjust the Input gas rate and Output CO2 % with the MA coefficient. Combine with the linear regression model. Plot the residuals.
+5. Use ARIMA (2,0,0) model for the residuals. Adjust the Input gas rate and Output CO2 % with the AR coefficient. Combine with the linear regression model. Plot the residuals.
+6. Use ARIMA (2,0,2) model for the residuals. Adjust the Input gas rate and Output CO2 % with the AR and MA coefficients. Combine with the linear regression model. Plot the residuals.
+7. Use fractional ARIMA model (aka ARFIMA) for the output gas CO2% - plot the residuals, acf and pacf plots of the model. You can use an R package like fracdiff – be careful to determine which lag to choose when executing this test.
+8. Perform  Summaries,  Durbin-Watson and Box-Ljung tests for each model and build table to compare AICs, BICs and p-vaules for each test across the ARIMA and ARFIMA models.
+9. Based on ACF plots and test results, which ARIMA model gives the best result in terms of residuals being close to white noise ?
+
+## 1. Linear Regression
+
+```{r}
+library(ggplot2)
+library(forecast)
+
+df <- read.csv('~/Datasets/31006/Gas Furnace Dataset.csv')
+names(df) <- c('input', 'output')
+
+ggplot(df, aes(x=input, y=output)) + 
+  geom_point() + 
+  geom_smooth(method='lm') + 
+  ggtitle('Gas Furnace Data')
+```
+
+
+```{r}
+m <- lm(output ~ input, data=df)
+
+acf(m$residuals)
+```
+
+Serious autocorrelation of the residuals at low lags.
+
+```{r}
+plot(m$residuals, type='l', main='Residuals of Linear Model')
+```
+
+Since the residuals are clearly autocorrelated, the assumption about 
+non-correlated models are violated. The linear model coefficients can be
+adjusted by using the Cochrane-Orcutt process: fit an ARMA model to the 
+residuals, adjust X & Y by the coefficients of the model, refit and iterate
+until it converges.
+
+## 2. ARIMA (0,0,1)
+
+1. Use ARIMA (0,0,1) model for the residuals. 
+2. Adjust the Input gas rate and Output CO2 % with the MA coefficient. 
+3. Combine with the linear regression model. 
+4. Plot the residuals.
+
+Use MA(1) model for the residuals
+
+```{r}
+ma1 <- Arima(m$residuals, order = c(0,0,1))
+summary(ma1)
+```
+
+Adjust input gas rate and Output CO2 % with the MA coefficient. 
+
+Here we use the handy `arma.innovation` function.
+
+```{r}
+arma.innovation <- function(x, arma.model, ar.truncation=10) {
+  p <- arma.model$arma[1]
+  q <- arma.model$arma[2]
+  ar.coef <- arma.model$coef[seq_len(p)]
+  ma.coef <- arma.model$coef[p + seq_len(q)]
+  if (q == 0) {
+    infinite.ar.coef <- ar.coef
+  } else {
+    infinite.ar.coef <- -ARMAtoMA(-ma.coef, -ar.coef, ar.truncation)
+  }
+  return(as.vector(filter(x, c(1, -infinite.ar.coef), side=1)))
+}
+
+df$input_ma1  <- arma.innovation(df$input, ma1)
+df$output_ma1 <- arma.innovation(df$output, ma1)
+df[11:16,]
+```
+
+Combine with the linear regression model.
+
+```{r}
+linear_ma1 <- lm(output_ma1 ~ input_ma1, data=df)
+summary(linear_ma1)
+```
+
+Plot the residuals.
+
+```{r}
+acf(linear_ma1$residuals)
+plot(linear_ma1$residuals, type='l')
+```
+
+Durbin-Watson and Box-Ljung tests
+
+
+
+## 3. ARIMA (1,0,0)
+
+Same deal as above, but with an AR(1) model instead.
+
+```{r}
+ar1 <- Arima(m$residuals, order = c(1,0,0))
+df$input_ar1  <- arma.innovation(df$input, ar1)
+df$output_ar1 <- arma.innovation(df$output, ar1)
+linear_ar1 <- lm(output_ar1 ~ input_ar1, data=df)
+acf(linear_ar1$residuals)
+plot(linear_ar1$residuals, type='l')
+```
+
+With pure autoregressive errors, we can use the new model to backwards
+ajust the old linear model and iterate until the estimates converge.
+
+The way to model errors using an autoregressive process is to:
+  1. Build a naive linear model
+  2. Model the residuals using AR(p)
+  3. Adjust x & y using AR coefficient by x'(t) = x(t) - b*x(t-1)
+  4. Run new linear model with x' and y'
+  5. Using new esimates and slope and intercept to adjust previous model by
+  new_slope = adjusted_slope and new_intercept = adjusted_intercept / (1-sum(AR_coef))
+  6. Repeat 2-5 until coefficients converge
+
+This is called the Cochrane-Orcutt process
+
+```{r}
+cochrane.orcutt <- function(x, y, order, iterations=10) {
+  linear.model <- lm(y ~ x)
+  res <- linear.model$residuals
+  
+  for(i in 1:iterations) {
+    coefs <- adjust_lm_coef(x, y, res, order)
+    res <- adjust_residuals(x, y, coefs[1], coefs[2])
+  }
+  
+  list("coefs"=coefs, "residuals"=res)
+}
+
+adjust_lm_coef <- function(x, y, resid, order) {
+  arma.model <- Arima(resid, order)
+  
+  xadj <- arma.innovation(x, arma.model)
+  yadj <- arma.innovation(y, arma.model)
+  
+  lm.adj <- lm(yadj ~ xadj)
+  
+  n <- length(coef(arma.model))
+  
+  intercept_adj <- lm.adj$coefficients[1] / (1-sum(arma.model$coef[1:(n-1)]))
+  slope_adj <- lm.adj$coefficients[2]
+  c(intercept_adj, slope_adj)
+}
+
+adjust_residuals <- function(x, y, intercept, slope) {
+  y - (intercept + x * slope)
+}
+
+ar1_co <- cochrane.orcutt(df$input, df$output, c(1,0,0))
+ar1_co$coefs
+```
+
+The intercept and slope are different than the single-iteration pass we get
+with just modeling the residuals once.
+
+```{r}
+linear_ar1
+```
+
+Compare to running an ARIMA with xreg
+
+```{r}
+Arima(df$output, c(1,0,0), xreg = df$input)
+```
+
+The intercept and slope here are the same as the iterative process.
+
+```{r}
+plot(linear_ar1$residuals, type='l')
+acf(linear_ar1$residuals)
+```
+
+Still not white noise though.
+
+Another method of modeling with autoregressive error susing the glme package.
+
+```{r, message=FALSE}
+library(nlme)
+mod.gls <- gls(output ~ input, data=df, correlation=corARMA(p=1), method="ML")
+summary(mod.gls)
+```
+
+```{r}
+acf(mod.gls$residuals)
+plot(mod.gls$residuals, type='l')
+```
+
+## 4. ARIMA (0,0,2)
+
+MA(2) now
+
+```{r}
+ma2 <- Arima(m$residuals, order = c(0,0,2))
+df$input_ma2  <- arma.innovation(df$input, ma2)
+df$output_ma2 <- arma.innovation(df$output, ma2)
+linear_ma2 <- lm(output_ma2 ~ input_ma2, data=df)
+acf(linear_ma2$residuals)
+plot(linear_ma2$residuals, type='l')
+```
+
+## 4. ARIMA (2,0,0)
+
+AR(2) 
+
+```{r}
+ar2 <- Arima(m$residuals, order = c(2,0,0))
+df$input_ar2  <- arma.innovation(df$input, ar2)
+df$output_ar2 <- arma.innovation(df$output, ar2)
+linear_ar2 <- lm(output_ar2 ~ input_ar2, data=df)
+acf(linear_ar2$residuals)
+plot(linear_ar2$residuals, type='l')
+```
+
+Getting better, closer to white noise now.
+
+Try the converging method of Cochrane-Orcutt.
+
+```{r}
+ar2_co <- cochrane.orcutt(df$input, df$output, c(2,0,0))
+ar2_co$coefs
+```
+
+Compare to running ARIMA with xreg again.
+
+```{r}
+Arima(df$output, c(2,0,0), xreg = df$input)
+```
+
+Coefficients pretty much converged to the same value again!
+
+```{r}
+Arima(ar2_co$residuals, c(2,0,0))
+```
+
+AIC and BIC are slighly different with the two approaches even though 
+log likelihood is the same. One of them is probably doing an adjustment for 
+dropped values or something I would guess.
+
+## 6. ARIMA (2,0,2)
+
+Since neither pure autoregressive nor pure moving average did the trick, 
+perhaps a combination of the two
+
+```{r}
+ar2ma2 <- Arima(m$residuals, c(2,0,2))
+summary(ar2ma2)
+
+df$input_ar2ma2  <- arma.innovation(df$input, ar2ma2)
+df$output_ar2ma2 <- arma.innovation(df$output, ar2ma2)
+
+linear_ar2ma2 <- lm(output_ar2ma2 ~ input_ar2ma2, data=df)
+
+acf(linear_ar2ma2$residuals)
+plot(linear_ar2ma2$residuals, type='l')
+```
+
+Hey that's prety good! There's still significant autocorrelation at lag=1.
+
+## 7. Fractional ARIMA
+
+```{r}
+library(arfima)
+
+model.arfima <- arfima(z=df$output, order=c(2,0,2),
+                       xreg=data.frame(xreg=df$input))
+
+summary(model.arfima)
+```
+
+```{r}
+plot(residuals(model.arfima)[[1]], type='l')
+acf(residuals(model.arfima)[[1]])
+pacf(residuals(model.arfima)[[1]])
+```
+
+## 8. Compare Models
+
+For each model:
+1. Perform  Summaries,  
+2. Durbin-Watson and Box-Ljung tests 
+3. build table to compare AICs, BICs and p-vaules for each test
+
+```{r, message=FALSE}
+library(lmtest)
+
+summary(ma1)
+summary(linear_ma1)
+
+dwtest(linear_ma1)
+Box.test(linear_ma1$residuals, type='Ljung-Box')
+
+ma1_pvals = c(
+  dwtest(linear_ma1)$p.value, 
+  Box.test(linear_ma1$residuals, type='Ljung-Box')$p.value)
+```
+
+```{r, message=FALSE}
+summary(ar1)
+summary(linear_ar1)
+
+dwtest(linear_ar1)
+Box.test(linear_ar1$residuals, type='Ljung-Box')
+
+ar1_pvals = c(
+  dwtest(linear_ar1)$p.value, 
+  Box.test(linear_ar1$residuals, type='Ljung-Box')$p.value)
+```
+
+```{r, message=FALSE}
+summary(ma2)
+summary(linear_ma2)
+
+dwtest(linear_ma2)
+Box.test(linear_ma2$residuals, type='Ljung-Box')
+
+ma2_pvals = c(
+  dwtest(linear_ma2)$p.value, 
+  Box.test(linear_ma2$residuals, type='Ljung-Box')$p.value)
+```
+
+```{r, message=FALSE}
+summary(ar2)
+summary(linear_ar2)
+
+dwtest(linear_ar2)
+Box.test(linear_ar2$residuals, type='Ljung-Box')
+
+ar2_pvals = c(
+  dwtest(linear_ar2)$p.value, 
+  Box.test(linear_ar2$residuals, type='Ljung-Box')$p.value)
+```
+
+```{r, message=FALSE}
+summary(ar2ma2)
+summary(linear_ar2ma2)
+
+dwtest(linear_ar2ma2)
+Box.test(linear_ar2ma2$residuals, type='Ljung-Box')
+
+ar2ma2_pvals = c(
+  dwtest(linear_ar2ma2)$p.value, 
+  Box.test(linear_ar2ma2$residuals, type='Ljung-Box')$p.value)
+```
+
+```{r, message=FALSE}
+summary(model.arfima)
+
+Box.test(residuals(model.arfima)$Mode1, type='Ljung-Box')
+
+arfima_pvals = c(
+  NA, 
+  Box.test(linear_ar2ma2$residuals, type='Ljung-Box')$p.value)
+```
+
+
+```{r}
+t(data.frame(
+  ar1 = c(ar1$aic, ar1$bic, ar1_pvals),
+  ar2 = c(ar2$aic, ar2$bic, ar2_pvals),
+  ma1 = c(ma1$aic, ma1$bic, ma1_pvals),
+  ma2 = c(ma2$aic, ma2$bic, ma2_pvals),
+  ar2ma2 = c(ar2ma2$aic, ar2ma2$bic, ar2ma2_pvals),
+  arifma = c(AIC(model.arfima), BIC(model.arfima), arfima_pvals),
+  row.names = c('aic', 'bic', 'Durbin-Watson pval', 'Ljung-Box pval')
+))
+```
+
+## 9. Conclusions
+
+From the ACF, summaries, AIC, and BIC, I think the fractional ARIMA model
+did the best job at capturing the residual time series information.
