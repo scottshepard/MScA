@@ -1,0 +1,33 @@
+---
+title: "Assignment7"
+author: "Scott Shepard"
+date: "5/24/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Prompt
+
+The data contain seat prices from the Chicago Mercantile Exchange.
+
+There are three classes of seats CME, IMM, and IOM which confer the rights to 
+trade different sets of commodities traded. CME seat owners can trade 
+everything, IMM seat owners are allowed to trade everything except 
+agricultural products, and IOM seat owners are allowed to trade only in 
+index products and all options.
+
+The seat price files are marked as ***S. The files contain the price for 
+which CME seats sold and the date of the sale. As expected, the seat price 
+time series is irregularly spaced in time. 
+
+Your task is to adopt an algorithm to create a time series that contains a 
+seat price for each month starting from January 2001 to December 2013. 
+You need to do this for the 3 classes of seats. Note that all 3 seat classes 
+have sale prices for January 2001 so you should not have any start up issues. 
+Please clearly explain why you adopted your algorithm and what other 
+alternatives you may have considered and why you rejected the alternatives.
+
