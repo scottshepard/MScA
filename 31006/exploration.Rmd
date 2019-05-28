@@ -1,7 +1,8 @@
 ---
-title: "Project Data Exploration"
+title: "Poisson Count Time Series Model on Electric Vehicle Charging"
+subtitle: "31006: Final Project "
 author: "Scott Shepard"
-date: "5/21/2019"
+date: "5/28/2019"
 output: html_document
 ---
 
@@ -9,52 +10,254 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-Packages
+## Initial Data Exploration
 
-```{r packages}
-library(ggplot2)
-```
-
-Read in the data and plot it whole
+Read in the electric vehicle charging data and plot it whole.
 
 ```{r read_data}
-df <- read.csv('~/Datasets/31006/EVData.csv', stringsAsFactors=F)
-names(df)[2] <- "EV"
-df$Time <- as.POSIXct(df$Time, format = "%Y-%m-%d %H:%M:%S")
+df_full <- read.csv('~/Datasets/31006/EVData.csv', stringsAsFactors=F)
+names(df_full)[2] <- "EV"
+df_full$Time <- as.POSIXct(df_full$Time, format = "%Y-%m-%d %H:%M:%S")
+df_full <- df_full[!is.na(df_full$Time), ]
 
-ggplot(df, aes(x=Time, y=EV)) + geom_line()
+library(ggplot2)
+ggplot(df_full, aes(x=Time, y=EV)) + geom_line()
 ```
 
 The data is quite spiky. This might be tough to try to predict. Try zooming
 in on the first few days.
 
 ```{r}
-ggplot(tail(df, 2000), aes(x=Time, y=EV)) + geom_line()
+ggplot(tail(df_full, 2000), aes(x=Time, y=EV)) + geom_line()
 ```
 
-There _is_ a strong timeseries component. We just need to be able to distinguish
-it from the stochastic spikes.
+There _is_ a strong timeseries component. We just need to be able to distinguish it from the stochastic spikes.
+
+## Daily Count Time Series
+
+One approach to get a less stochastic time series is to turn the 15-minute
+EV charging data into a daily count of how many cars were plugged in. Here
+we assume that 3.3 volts is the standard charging for one car. Counting
+it out in 3.3 unit chunks gives us the number of cars plugged in at that
+time.
+
+```{r, warning=F, message=F}
+library(dplyr)
+
+df <- df_full
+
+df$Date <- as.Date(df$Time)
+df$cars <- round(df$EV / 3.3)
+
+ggplot(tail(df, 2000), aes(x=Time, y=cars)) + geom_line()
+```
+
+Now we want to know how many cars in total there were ofer the course of the day.
+
+We can't just group by date and sum up total number of cars. 
+There could be one or two cars  plugged in for the whole day that would 
+register artificually high. We need to count the comings and goings 
+chunk by chunk and add it up for each day.
 
 ```{r}
-ggplot(head(df, 500), aes(x=Time, y=EV)) + geom_line()
+count_cars <- function(day) {
+  #print(day$Date[1])
+  current_cars <- 0
+  total_cars <- 0
+  if(all(is.na(day$cars))) {
+    return(NA)
+  }
+  if(sum(day$cars,na.rm=T) == 0) {
+    return(0)
+  }
+  for(i in 1:(nrow(day)-1)) {
+    row <- day[i,]
+    if(is.na(row[['cars']])) {
+      next
+    }
+    if(row[['cars']] > current_cars) {
+      total_cars = total_cars + (row[['cars']] - current_cars)
+      current_cars = row[['cars']]
+    } else if(row[['cars']] < current_cars) {
+      current_cars = row[['cars']]
+    }
+  }
+  return(total_cars)
+}
 ```
 
-Call every value above 2 as a "spike" and see if we can predict those just
-from the timeseries. 
+Summing total vs counting jumps
 
 ```{r}
-df$cars <- df$EV / 3.3
+filter(df, Date == '2017-07-25') %>% 
+  ggplot(aes(x=Time, y=cars)) + geom_line() + 
+  labs(title='Number of Cars per 15 minutes',
+       subtitle='7/25/17')
 
-
-
+c(Summing = sum(df[df$Date == "2017-07-25", ]$cars),
+  Counting = count_cars(df[df$Date == "2017-07-25", ]))
 ```
-
-
-## Zero-Inflated Count Series
 
 ```{r}
-dfz <- df
+daily <- group_by(df, Date) %>%
+  do(data.frame(n_cars = count_cars(.)))
 
-
+head(daily)
 ```
 
+```{r}
+ggplot(daily, aes(x=Date, y=n_cars)) + geom_line(stat='identity')
+```
+
+Overall the plot of daily car counts looks pretty similar to 15 minute EV 
+data. 
+
+How does one week in August compare?
+
+```{r}
+filter(daily, Date >= '2018-08-01', Date < '2018-08-08') %>%
+  ggplot(aes(x=Date, y=n_cars)) + geom_line()
+
+filter(df, Date >= '2018-08-01', Date < '2018-08-08') %>%
+  ggplot(aes(x=Time, y=EV)) + geom_line()
+```
+
+So it can transform pretty dramatically with lots of up and down.
+
+## Poisson Time Series Modeling
+
+First split into train and test. The timeseries package I'm using can't 
+handle gaps in the data so I'm using data since the 6/15/18 to avoid
+the large gap in the summer of 2018.
+
+```{r}
+train <- daily[daily$Date >= '2018-06-15', ]
+test <- train[(round(nrow(train)*.9)):nrow(train),]
+train <- train[1:(round(nrow(train)*.9)-1),]
+
+train$n_cars[is.na(train$n_cars)] <- 0
+
+c(nrow(train), nrow(test))
+```
+
+With 34 data points in test we are predicting about a month out.
+
+The library `tscount` provides the function `tsglm`. It fits an integer-valued GARCH model of order p and q, abbreviated as INGARCH(p,q). These models are also known as autoregressive conditional Poisson (ACP) models.
+
+I have specificed a seasonality of 1 (daily) and 7 (weekly) to be fitted.
+
+```{r}
+library(tscount)
+
+carsfit_pois <- tsglm(
+  train$n_cars,  
+  model = list(past_obs = c(1, 7)),
+  distr="poisson")
+
+summary(carsfit_pois)
+```
+
+```{r, fig.height=5, fig.width=8}
+library(reshape2)
+
+train$fitted.values <- carsfit_pois$fitted.values
+
+melt(train, id.vars='Date') %>%
+  ggplot(aes(x=Date, y=value, color=variable)) + 
+  geom_point() + geom_line() + 
+  theme(legend.position = "top",
+        legend.title = element_blank())
+```
+
+Not bad? It seems like the poisson time series captures the weekend
+zeros pretty well.
+
+```{r}
+acf(residuals(carsfit_pois))
+plot(residuals(carsfit_pois), type='l')
+```
+
+Well hot damn that sure seems to fit well. The residuals look like
+white noise and the ACF chart indicates no autocorrelation.
+
+```{r}
+Box.test(residuals(carsfit_pois), type='Ljung-Box')
+```
+
+## Test Error
+
+```{r}
+tp <- predict(carsfit_pois, 34)
+
+test$prediction <- tp$median
+```
+
+```{r}
+melt(test, id.vars='Date', measure.vars=c('n_cars', 'prediction')) %>%
+  ggplot(aes(x=Date, y=value, color=variable)) + 
+  geom_point() + geom_line() + 
+  #geom_bar(stat='identity') + 
+  labs(title='Test Period - Predictions vs. Actuals',
+       subtitle = paste(test$Date[1], 'to', test$Date[nrow(test)]))
+```
+
+Interesting pattern in the prediictions. It seems to do pretty well
+initially but trend towards the median as we go farther out. I 
+wouldn't trust this prediction beyond one or two weeks.
+
+## Error Estimation
+
+```{r}
+week_i <- c()
+i <- 1
+while(length(week_i) < nrow(test)) {
+  week_i <- c(week_i, rep(i,7))
+  i = i + 1
+}
+week_i <- week_i[1:nrow(test)]
+test$week_i <- week_i
+
+test$residual <- test$n_cars - test$prediction
+test$actual <- test$n_cars
+
+residual_sum_of_squares <- function(preds, actuals) {
+  residuals <- actuals - preds
+  sum(residuals**2)
+}
+
+mean_squared_error <- function(preds, actuals) {
+  residual_sum_of_squares(preds, actuals) / length(preds)
+}
+
+mean_absolute_percentage_error <- function(preds, actuals) {
+  residuals <- actuals - preds
+  if(any(actuals == 0)) {
+    actuals[actuals == 0] <- 1
+  }
+  100 / length(residuals) * sum(abs(residuals)/ actuals)
+}
+
+symmetric_mean_absolute_percentage_error <- function(preds, actuals) {
+  residuals <- actuals - preds
+  if(any(actuals == 0)) {
+    actuals[actuals == 0] <- 1
+  }
+  if(any(preds == 0)) {
+    preds[preds == 0] <- 1
+  }
+  100 / length(residuals) * sum(residuals / ((abs(actuals) + abs(preds))/2))
+}
+
+error_df <- group_by(test, week_i) %>%
+  do(
+    data.frame(
+      rss = residual_sum_of_squares(.$prediction, .$n_cars),
+      mse = mean_squared_error(.$prediction, .$n_cars),
+      mape = mean_absolute_percentage_error(.$prediction, .$n_cars),
+      smape = symmetric_mean_absolute_percentage_error(.$prediction, .$n_cars)
+  ))
+
+print(error_df)
+```
+
+Initial small errors turn into hot garbage pretty quickly.
