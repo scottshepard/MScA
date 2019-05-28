@@ -44,7 +44,10 @@ install.packages(
     "tseries",
     "forecast",
     "TSA",
-    "prophet"
+    "prophet",
+    "arifma",
+    "MTS",
+    "astsa"
   ),
   repos='http://cran.us.r-project.org'
 )
