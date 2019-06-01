@@ -1,0 +1,192 @@
+---
+title: "Assignment 8"
+author: "Scott Shepard"
+date: "6/1/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Prompt
+
+This assignment is dependent on completion of previous assignment. 
+Objective of this project is to forecast CME seat prices using CME trading
+volume.
+
+Now that you have a monthly time series of CME seat prices, the file
+`Contracts_Volume.csv` contains the monthly trading volume for 
+different CME products.  
+
+Each row has the first date of the following month (the trade volume is 
+for the month), the commodity indicator for CME, the short description of 
+the commodity, whether it is Future (F) or Option (O), 
+the electronic trading volume and the total trading volume. 
+The floor trading volume is the difference between the total 
+volume and the electronic volume.
+
+The file `Contracts_Classification.csv` associates each CME commodity 
+with a seat class.
+
+Note that owning a CME seat gives a trader advantage for floor trading.
+In contrast, owning a CME seat does not have any advantage for electronic
+trading. Since electronic trading constitutes market participants trading
+directly with other participants via CME's network connections and order
+matching engine.
+
+There are three classes of seats CME, IMM, and IOM which confer the 
+rights to trade different sets of commodities traded. 
+CME seat owners can trade everything, IMM seat owners are allowed to 
+trade all futures and options except agricultural products, 
+and IOM seat owners are allowed to trade future and options 
+only in index products and all other CME options.
+
+To find the volume, for example index products, add both the 
+futures and options volume for the same index product for a month.
+
+ 
+Your task is to use the trading volume information to forecast the CME
+monthly seat price for 2013.  It is recommended to do exploratory data
+analysis to find initial data relationships such as correlations. For
+example, the total trade volume for all CME products might be a good
+predictor for CME seat class, but not for the others. 
+You may have to choose and select which commodities have influence on 
+the IMM and IOM seat prices.
+
+The tasks are outlined below.
+
+Task A:
+
+Use the following algorithms:
+
+- Linear regression (seat price is independent, volume(s) dependent)
+- Linear regression with ARMA errors (use arima with xreg)
+- Holt Winters
+- ARIMA
+- Seasonal ARIMA (SARIMA) - here seasonality is monthly
+- Fractional ARIMA (ARFIMA) - check applicability first using the ACF
+- ARMA and GARCH combination - use the fGarch R library and garchFit()
+
+Note that you have to implement each of the above algorithms for each of the 3 classes of seats: CME, IMM, IOM. 
+
+Task B:
+
+Since you already have the seat prices for the 2013,
+evaluate each algorithm from Task A using sMAPE. 
+Which one do you recommend to forecast monthly prices for each of the seat classes?
+
+## Create Time Serieses (Assignment 7)
+
+```{r, warning=F, message=F}
+cmeS <- read.csv("~/Datasets/31006/cmeS.csv")
+immS <- read.csv("~/Datasets/31006/immS.csv")
+iomS <- read.csv("~/Datasets/31006/iomS.csv")
+
+library(dplyr)
+library(zoo)
+library(ggplot2)
+library(reshape2)
+
+create_timeseries <- function(df_, interpolation='spline') {
+  # Date formatting
+  df_$DateOfSale <- as.Date(df_$DateOfSale, '%m/%d/%Y')
+  df_$yearmon <- as.yearmon(df_$DateOfSale)
+  
+  # Group by month
+  df_ <- df_ %>%
+    group_by(yearmon) %>%
+    summarize(price=mean(price)) %>%
+    data.frame() %>%
+    merge(data.frame(yearmon = as.yearmon(2001 + seq(0, 12*13-1)/12)),all=T)
+  
+  # Interpolate
+  df_$interpolated <- is.na(df_$price)
+  x = df_$yearmon
+  if('constant' %in% interpolation) {
+    df_$constant <- approx(df_$yearmon, df_$price, xout=x, method = "constant")$y  
+  }
+  if('linear' %in% interpolation) {
+    df_$linear <- approx(df_$yearmon, df_$price, xout=x)$y
+  }
+  if('spline' %in% interpolation) {
+    df_$spline <- spline(df_, n=nrow(df_))$y
+  }
+  df_
+}
+
+ts_cmeS <- create_timeseries(cmeS)
+ts_immS <- create_timeseries(immS)
+ts_iomS <- create_timeseries(iomS)
+```
+
+## Contract Volume Data
+
+```{r, message=FALSE, echo=FALSE}
+library(stringr)
+
+cv <- read.csv("~/Datasets/31006/Contracts_Volume.csv", stringsAsFactors = F)
+cc <- read.csv("~/Datasets/31006/Contracts_Classification.csv", stringsAsFactors = F)
+
+cv$Electronic.Volume <- str_replace_all(cv$Electronic.Volume, ',', '')
+cv$Electronic.Volume <- as.numeric(cv$Electronic.Volume)
+cv$Floor.Volume <- cv$Total.Volume - cv$Electronic.Volume
+
+df = merge(cv, cc, 
+           by.x='Commodity.Indicator', by.y='Commodity.Code', all.x=T)
+
+df$Date <- as.Date(df$Date, '%m/%d/%Y')
+df$yearmon <- as.yearmon(df$Date)
+
+monthly_vol <- df %>% 
+  group_by(yearmon, Division) %>%
+  summarize(ev = sum(Electronic.Volume), 
+            tv = sum(Total.Volume), 
+            fv=sum(Floor.Volume))
+
+ggplot(monthly_vol, aes(x=yearmon, y=fv, color=Division)) + 
+  geom_line() + 
+  labs(title='Monthly Floor Volume at the Merch',
+       y='Floor Volume', x='Time')
+```
+
+```{r}
+ts_cmeS <- ts_cmeS %>% 
+  merge(
+    filter(monthly_vol, Division=='CME')[,c('yearmon', 'fv')], 
+    on='yearmon', all.x=T)
+
+ts_immS <- ts_immS %>% 
+  merge(
+    filter(monthly_vol, Division=='IMM')[,c('yearmon', 'fv')], 
+    on='yearmon', all.x=T)
+
+ts_iomS <- ts_iomS %>% 
+  merge(
+    filter(monthly_vol, Division=='IOM')[,c('yearmon', 'fv')], 
+    on='yearmon', all.x=T)
+
+head(ts_cmeS)
+```
+
+## Task A: Fit Models
+
+### Linear Regression 
+
+Seat price is independent, Volume dependent
+
+```{r}
+lm_cme <- lm(spline ~ fv, data=ts_cmeS)
+
+summary(lm_cme)
+
+ggplot(ts_cmeS, aes(x=fv, y=spline)) + 
+  geom_point() + 
+  geom_smooth(method='lm') + 
+  labs('')
+
+ts_cmeS %>%
+  melt(id.vars='yearmon', measure.vars = c('fv', 'spline')) %>% 
+  ggplot(aes(x=yearmon, y=value, color=variable)) + 
+  geom_line()
+```
