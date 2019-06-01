@@ -280,6 +280,8 @@ summary(lm_arima_iom)
 ### CME
 
 ```{r}
+hw_cme <- HoltWinters(ts(ts_cmeS$spline, start=2001, frequency = 12))
+hw_cme
 ```
 
 ### IMM
