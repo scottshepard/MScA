@@ -2,14 +2,16 @@
 title: "Assignment 8"
 author: "Scott Shepard"
 date: "6/1/2019"
-output: html_document
+output: 
+  html_document:
+    toc: true
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Prompt
+# Prompt
 
 This assignment is dependent on completion of previous assignment. 
 Objective of this project is to forecast CME seat prices using CME trading
@@ -76,7 +78,11 @@ Since you already have the seat prices for the 2013,
 evaluate each algorithm from Task A using sMAPE. 
 Which one do you recommend to forecast monthly prices for each of the seat classes?
 
-## Create Time Serieses (Assignment 7)
+# Data
+
+## Create Time Serieses
+
+This function is copied over from assignment 7.
 
 ```{r, warning=F, message=F}
 cmeS <- read.csv("~/Datasets/31006/cmeS.csv")
@@ -122,6 +128,10 @@ ts_iomS <- create_timeseries(iomS)
 
 ## Contract Volume Data
 
+The new datasets need to be merged in with the time series.
+  1. Contracts Volume
+  2. Contracts Classification
+
 ```{r, message=FALSE, echo=FALSE}
 library(stringr)
 
@@ -132,61 +142,238 @@ cv$Electronic.Volume <- str_replace_all(cv$Electronic.Volume, ',', '')
 cv$Electronic.Volume <- as.numeric(cv$Electronic.Volume)
 cv$Floor.Volume <- cv$Total.Volume - cv$Electronic.Volume
 
-df = merge(cv, cc, 
-           by.x='Commodity.Indicator', by.y='Commodity.Code', all.x=T)
+df = merge(cv, cc, by.x='Commodity.Indicator', by.y='Commodity.Code', all.x=T)
 
 df$Date <- as.Date(df$Date, '%m/%d/%Y')
 df$yearmon <- as.yearmon(df$Date)
 
-monthly_vol <- df %>% 
+# IMM and IOM can only trade the commodities listed under those seats
+imm_iom_monthly_vol <- df %>% 
+  filter(Division %in% c('IMM', 'IOM')) %>%
   group_by(yearmon, Division) %>%
-  summarize(ev = sum(Electronic.Volume), 
-            tv = sum(Total.Volume), 
-            fv=sum(Floor.Volume))
+  summarize(electric.vol = sum(Electronic.Volume), 
+            total.vol = sum(Total.Volume), 
+            floor.vol=sum(Floor.Volume))
 
-ggplot(monthly_vol, aes(x=yearmon, y=fv, color=Division)) + 
+# CME can trade all commodities, not just the ones listed
+cme_monthly_vol <- df %>%
+  group_by(yearmon) %>%
+  summarize(electric.vol = sum(Electronic.Volume), 
+            total.vol = sum(Total.Volume), 
+            floor.vol=sum(Floor.Volume)) %>%
+  mutate(Division = 'CME')
+
+monthly_vol <- rbind(data.frame(cme_monthly_vol), data.frame(imm_iom_monthly_vol))
+
+ggplot(monthly_vol, aes(x=yearmon, y=floor.vol, color=Division)) + 
   geom_line() + 
   labs(title='Monthly Floor Volume at the Merch',
        y='Floor Volume', x='Time')
 ```
 
 ```{r}
-ts_cmeS <- ts_cmeS %>% 
-  merge(
-    filter(monthly_vol, Division=='CME')[,c('yearmon', 'fv')], 
-    on='yearmon', all.x=T)
+attach_monthly_vol <- function(ts_df, division, monthly_df = monthly_vol) {
+  monthly_df <- filter(monthly_df, Division==division)
+  monthly_df <- select(monthly_df, -Division)
+  left_join(ts_df, monthly_df, by='yearmon')
+}
 
-ts_immS <- ts_immS %>% 
-  merge(
-    filter(monthly_vol, Division=='IMM')[,c('yearmon', 'fv')], 
-    on='yearmon', all.x=T)
-
-ts_iomS <- ts_iomS %>% 
-  merge(
-    filter(monthly_vol, Division=='IOM')[,c('yearmon', 'fv')], 
-    on='yearmon', all.x=T)
+ts_cmeS <- attach_monthly_vol(ts_cmeS, 'CME')
+ts_immS <- attach_monthly_vol(ts_immS, 'IMM')
+ts_iomS <- attach_monthly_vol(ts_iomS, 'IOM')
 
 head(ts_cmeS)
 ```
 
-## Task A: Fit Models
+# Task A: Fit Models
 
-### Linear Regression 
+## Linear Regression 
 
 Seat price is independent, Volume dependent
 
-```{r}
-lm_cme <- lm(spline ~ fv, data=ts_cmeS)
+### CME
 
+```{r}
+lm_cme <- lm(spline ~ floor.vol, data=ts_cmeS)
 summary(lm_cme)
 
-ggplot(ts_cmeS, aes(x=fv, y=spline)) + 
-  geom_point() + 
-  geom_smooth(method='lm') + 
-  labs('')
+ts_floor_vol_scatter <- function(ts_df, division) {
+  ggplot(ts_df, aes(x=floor.vol, y=spline)) + 
+    geom_point() + 
+    geom_smooth(method='lm') + 
+    labs(title=paste(division, 'Seat Floor Volume vs. Interpolated Price'),
+         subitle='Linear Model')
+}
 
-ts_cmeS %>%
-  melt(id.vars='yearmon', measure.vars = c('fv', 'spline')) %>% 
-  ggplot(aes(x=yearmon, y=value, color=variable)) + 
-  geom_line()
+ts_with_floor_vol_plot <- function(ts_df, division) {
+  X <- ts_df$yearmon
+  Y1 <- ts_df$spline
+  Y2 <- ts_df$floor.vol
+  par(mar = c(5, 5, 3, 5))
+  plot(x=X, y=Y1, type ="l", 
+       ylab = paste("Interpolated Price of",division,"Seat"),
+       main = paste(division, "Seat price & Floor Volume"), 
+       xlab = "Time", xaxt='n',
+       col = "blue")
+  par(new = TRUE)
+  plot(x=X, y=Y2, type = "l", 
+       xaxt = "n", yaxt = "n", ylab = "", xlab = "", 
+       col = "red", lty = 2)
+  axis(side = 4)
+  mtext("Floor Volume", side = 4, line = 3)
+  legend("topleft", c("Seat Price", "Floor Volume"),
+         col = c("blue", "red"), lty = c(1, 2))
+}
+
+ts_floor_vol_scatter(ts_cmeS, 'CME')
+ts_with_floor_vol_plot(ts_cmeS, 'CME')
+```
+
+### IMM
+
+```{r}
+lm_imm <- lm(spline ~ floor.vol, data=ts_immS)
+summary(lm_imm)
+
+ts_floor_vol_scatter(ts_immS, 'IMM')
+ts_with_floor_vol_plot(ts_iomS, 'IMM')
+```
+
+### IOM
+
+```{r lm_iom}
+lm_iom <- lm(spline ~ floor.vol, data=ts_iomS)
+summary(lm_iom)
+
+
+ts_floor_vol_scatter(ts_iomS, 'IOM')
+ts_with_floor_vol_plot(ts_iomS, 'IOM')
+```
+
+## Linear Regression with ARIMA Errors
+
+### CME
+
+```{r, warning=F, message=F}
+library(forecast)
+
+lm_arima_cme <- auto.arima(ts_cmeS$spline, xreg=ts_cmeS$floor.vol)
+summary(lm_arima_cme)
+```
+
+### IMM
+
+```{r}
+lm_arima_imm <- auto.arima(ts_immS$spline, xreg=ts_immS$floor.vol)
+summary(lm_arima_imm)
+```
+
+### IOM
+
+```{r}
+lm_arima_iom <- auto.arima(ts_iomS$spline, xreg=ts_iomS$floor.vol)
+summary(lm_arima_iom)
+```
+
+## Holt Winters
+
+### CME
+
+```{r}
+```
+
+### IMM
+
+```{r}
+```
+
+### IOM 
+
+```{r}
+```
+
+## ARIMA
+
+### CME
+
+```{r}
+```
+
+### IMM
+
+```{r}
+```
+
+### IOM 
+
+```{r}
+```
+
+## Seasonal ARIMA 
+
+Seasonality is monthly
+
+### CME
+
+```{r}
+```
+
+### IMM
+
+```{r}
+```
+
+### IOM 
+
+```{r}
+```
+
+
+## Fractional ARIMA
+
+### CME
+
+```{r}
+```
+
+### IMM
+
+```{r}
+```
+
+### IOM 
+
+```{r}
+```
+
+Check applicability first using the ACF
+
+## ARMA and GARCH combination 
+
+### CME
+
+```{r}
+```
+
+### IMM
+
+```{r}
+```
+
+### IOM 
+
+```{r}
+```
+
+Use the fGarch R library and garchFit()
+
+# Task B: Evaluation
+
+Evaluated each model with sMAPE
+
+```{r}
+smape <- function(act, pred) {
+  sm <- abs(act - pred) / ((abs(act) + abs(pred))/2)
+  return(sum(sm, na.rm = T) * 100/length(act))
+}
 ```
