@@ -77,14 +77,16 @@ df$cars <- round(df$EV / 3.3)
 ggplot(tail(df, 2000), aes(x=Time, y=cars)) + geom_line()
 ```
 
-## Data Transformation
-
 Now we want to know how many cars in total there were ofer the course of the day.
 
 We can't just group by date and sum up total number of cars. 
-There could be one or two cars  plugged in for the whole day that would 
+There could be one or two cars plugged in for the whole day that would 
 register artificually high. We need to count the comings and goings 
 chunk by chunk and add it up for each day.
+
+Actually we need to do both. In order to transform the predictions back into
+voltage readings, a sum count of cars-quarter-hours is a better way 
+to get voltage units.
 
 ```{r}
 count_cars <- function(day) {
@@ -127,14 +129,18 @@ c(Summing = sum(df[df$Date == "2017-07-25", ]$cars),
 
 ```{r}
 daily <- group_by(df, Date) %>%
-  do(data.frame(n_cars = count_cars(.),
-                sum = sum(.$cars)))
+  do(data.frame(count_cars = count_cars(.),
+                sum_cars = sum(.$cars)))
 
 head(daily)
 ```
 
 ```{r}
-ggplot(daily, aes(x=Date, y=n_cars)) + geom_line(stat='identity')
+ggplot(daily, aes(x=Date, y=count_cars)) + geom_line(stat='identity')
+```
+
+```{r}
+ggplot(daily, aes(x=Date, y=sum_cars)) + geom_line(stat='identity')
 ```
 
 Overall the plot of daily car counts looks pretty similar to 15 minute EV 
@@ -144,10 +150,10 @@ How does one week in August compare?
 
 ```{r}
 filter(daily, Date >= '2018-08-01', Date < '2018-08-08') %>%
-  ggplot(aes(x=Date, y=n_cars)) + geom_line()
+  ggplot(aes(x=Date, y=count_cars)) + geom_line()
 
 filter(daily, Date >= '2018-08-01', Date < '2018-08-08') %>%
-  ggplot(aes(x=Date, y=sum)) + geom_line()
+  ggplot(aes(x=Date, y=sum_cars)) + geom_line()
 
 filter(df, Date >= '2018-08-01', Date < '2018-08-08') %>%
   ggplot(aes(x=Time, y=EV)) + geom_line()
@@ -166,8 +172,8 @@ train <- daily[daily$Date >= '2018-06-15', ]
 test <- train[(round(nrow(train)*.9)):nrow(train),]
 train <- train[1:(round(nrow(train)*.9)-1),]
 
-train$n_cars[is.na(train$n_cars)] <- 0
-train$sum[is.na(train$sum)] <- 0
+train$count_cars[is.na(train$count_cars)] <- 0
+train$sum_cars[is.na(train$sum_cars)] <- 0
 
 c(nrow(train), nrow(test))
 ```
@@ -186,14 +192,14 @@ I have specificed a seasonality of 1 (daily) and 7 (weekly) to be fitted.
 library(tscount)
 
 count_carsfit_pois <- tsglm(
-  train$n_cars,  
+  train$count_cars,  
   model = list(past_obs = c(1, 7)),
   distr="poisson")
 
 summary(count_carsfit_pois)
 
 sum_carsfit_pois <- tsglm(
-  train$sum,  
+  train$sum_cars,  
   model = list(past_obs = c(1, 7)),
   distr="poisson")
 
@@ -206,13 +212,13 @@ library(reshape2)
 train$count.fitted.values <- count_carsfit_pois$fitted.values
 train$sum.fitted.values <- sum_carsfit_pois$fitted.values
 
-melt(train, id.vars='Date', measure.vars = c('count.fitted.values', 'n_cars')) %>%
+melt(train, id.vars='Date', measure.vars = c('count.fitted.values', 'count_cars')) %>%
   ggplot(aes(x=Date, y=value, color=variable)) + 
   geom_point() + geom_line() + 
   theme(legend.position = "top",
         legend.title = element_blank())
 
-melt(train, id.vars='Date', measure.vars = c('sum.fitted.values', 'sum')) %>%
+melt(train, id.vars='Date', measure.vars = c('sum.fitted.values', 'sum_cars')) %>%
   ggplot(aes(x=Date, y=value, color=variable)) + 
   geom_point() + geom_line() + 
   theme(legend.position = "top",
@@ -233,7 +239,8 @@ plot(residuals(sum_carsfit_pois), type='l')
 ```
 
 Well hot damn that sure seems to fit well. The residuals look like
-white noise and the ACF chart indicates no autocorrelation.
+white noise and the ACF chart indicates no autocorrelation. Though there is 
+quite a bit of heteroskedasticity.
 
 ```{r}
 Box.test(residuals(count_carsfit_pois), type='Ljung-Box')
@@ -251,7 +258,7 @@ test$sum_prediction <- tp_sum$median
 ```
 
 ```{r}
-melt(test, id.vars='Date', measure.vars=c('n_cars', 'count_prediction')) %>%
+melt(test, id.vars='Date', measure.vars=c('count_cars', 'count_prediction')) %>%
   ggplot(aes(x=Date, y=value, color=variable)) + 
   geom_point() + geom_line() + 
   #geom_bar(stat='identity') + 
@@ -264,7 +271,7 @@ initially but trend towards the median as we go farther out. I
 wouldn't trust this prediction beyond one or two weeks.
 
 ```{r}
-melt(test, id.vars='Date', measure.vars=c('sum', 'sum_prediction')) %>%
+melt(test, id.vars='Date', measure.vars=c('sum_cars', 'sum_prediction')) %>%
   ggplot(aes(x=Date, y=value, color=variable)) + 
   geom_point() + geom_line() + 
   #geom_bar(stat='identity') + 
@@ -275,18 +282,6 @@ melt(test, id.vars='Date', measure.vars=c('sum', 'sum_prediction')) %>%
 ## Error Analysis
 
 ```{r}
-week_i <- c()
-i <- 1
-while(length(week_i) < nrow(test)) {
-  week_i <- c(week_i, rep(i,7))
-  i = i + 1
-}
-week_i <- week_i[1:nrow(test)]
-test$week_i <- week_i
-
-test$residual <- test$n_cars - test$prediction
-test$actual <- test$n_cars
-
 residual_sum_of_squares <- function(preds, actuals) {
   residuals <- actuals - preds
   sum(residuals**2)
@@ -304,27 +299,95 @@ mean_absolute_percentage_error <- function(preds, actuals) {
   100 / length(residuals) * sum(abs(residuals)/ actuals)
 }
 
-symmetric_mean_absolute_percentage_error <- function(preds, actuals) {
-  residuals <- actuals - preds
-  if(any(actuals == 0)) {
-    actuals[actuals == 0] <- 1
-  }
-  if(any(preds == 0)) {
-    preds[preds == 0] <- 1
-  }
-  100 / length(residuals) * sum(residuals / ((abs(actuals) + abs(preds))/2))
-}
+smape <- function(actual, pred){
 
-error_df <- group_by(test, week_i) %>%
+   N <- length(actual)
+
+   bool.iid <- (actual==0)&(pred==0)
+   actual <- actual[!bool.iid]
+   pred <- pred[!bool.iid]
+
+   val <- 200/N*sum(abs((actual - pred))/(actual+pred))
+
+   return(val)
+}
+```
+
+```{r}
+week_i <- c()
+i <- 1
+while(length(week_i) < nrow(test)) {
+  week_i <- c(week_i, rep(i,7))
+  i = i + 1
+}
+week_i <- week_i[1:nrow(test)]
+test$week_i <- week_i
+
+count_error_df <- group_by(test, week_i) %>%
   do(
     data.frame(
-      rss = residual_sum_of_squares(.$count_prediction, .$n_cars),
-      mse = mean_squared_error(.$count_prediction, .$n_cars),
-      mape = mean_absolute_percentage_error(.$count_prediction, .$n_cars),
-      smape = symmetric_mean_absolute_percentage_error(.$count_prediction, .$n_cars)
+      rss = residual_sum_of_squares(.$count_prediction, .$count_cars),
+      mse = mean_squared_error(.$count_prediction, .$count_cars),
+      mape = mean_absolute_percentage_error(.$count_prediction, .$count_cars),
+      smape = smape(.$count_prediction, .$count_cars)
   ))
 
-print(error_df)
+sum_error_df <- group_by(test, week_i) %>%
+  do(
+    data.frame(
+      rss = residual_sum_of_squares(.$sum_prediction, .$sum_cars),
+      mse = mean_squared_error(.$sum_prediction, .$sum_cars),
+      mape = mean_absolute_percentage_error(.$sum_prediction, .$sum_cars),
+      smape = smape(.$sum_prediction, .$sum_cars)
+  ))
+
+print(count_error_df)
+print(sum_error_df)
 ```
 
 Initial small errors turn into hot garbage pretty quickly.
+
+## Prediction in EV Units
+
+```{r}
+test_ev <- df[df$Date >= min(test$Date),]
+test$ev_prediction <- test$sum_cars * 3.3 / 24 / 4
+
+
+test_ev <- select(test, Date, week_i, ev_prediction) %>% merge(test_ev, by='Date', all=T)
+
+test_ev %>% 
+  melt(id.vars=c('Time'), measure.vars=c('ev_prediction', 'EV')) %>%
+  ggplot(aes(x=Time, y=value, color=variable)) + geom_line() +
+  labs(y='Charging Voltage') +
+  theme(axis.title.x = element_blank())
+```
+
+```{r}
+smape(test_ev$EV, test_ev$ev_prediction)
+
+group_by(test_ev, week_i) %>%
+  summarize(smape(EV, ev_prediction))
+```
+
+## Quarter-hour count dataset
+
+```{r}
+qh_train <- df[df$Date < min(test$Date) & df$Date > '2018-06-15',]
+qh_train[is.na(qh_train$cars),]$cars <- 0
+qh_test <- df[df$Date >= min(test$Date),]
+
+count_carsfit_pois <- tsglm(
+  qh_train$cars,  
+  model = list(past_obs = c(1, 4, 360, 2520)),
+  distr="poisson")
+
+qh_test$cars_pred <- predict(count_carsfit_pois, nrow(qh_test))$median
+qh_test$ev_pred <- qh_test$cars_pred * 3.3
+
+qh_test %>% 
+  melt(id.vars=c('Time'), measure.vars=c('ev_pred', 'EV')) %>%
+  ggplot(aes(x=Time, y=value, color=variable)) + geom_line() +
+  labs(y='Charging Voltage') +
+  theme(axis.title.x = element_blank())
+```
