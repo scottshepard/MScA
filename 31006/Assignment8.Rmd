@@ -149,7 +149,7 @@ df$yearmon <- as.yearmon(df$Date)
 
 # IMM and IOM can only trade the commodities listed under those seats
 imm_iom_monthly_vol <- df %>% 
-  filter(Division %in% c('IMM', 'IOM')) %>%
+  dplyr::filter(Division %in% c('IMM', 'IOM')) %>%
   group_by(yearmon, Division) %>%
   summarize(electric.vol = sum(Electronic.Volume), 
             total.vol = sum(Total.Volume), 
@@ -173,7 +173,7 @@ ggplot(monthly_vol, aes(x=yearmon, y=floor.vol, color=Division)) +
 
 ```{r}
 attach_monthly_vol <- function(ts_df, division, monthly_df = monthly_vol) {
-  monthly_df <- filter(monthly_df, Division==division)
+  monthly_df <- dplyr::filter(monthly_df, Division==division)
   monthly_df <- select(monthly_df, -Division)
   left_join(ts_df, monthly_df, by='yearmon')
 }
@@ -191,13 +191,13 @@ Before fitting any models, remove the 2013 year from the timeseries objects
 and keep the 2013 year as the values to judge the forecasts.
 
 ```{r}
-ts_cmeS_2013 <- filter(ts_cmeS_all, yearmon >= 2013)
-ts_immS_2013 <- filter(ts_immS_all, yearmon >= 2013)
-ts_iomS_2013 <- filter(ts_iomS_all, yearmon >= 2013)
+ts_cmeS_2013 <- dplyr::filter(ts_cmeS_all, yearmon >= 2013)
+ts_immS_2013 <- dplyr::filter(ts_immS_all, yearmon >= 2013)
+ts_iomS_2013 <- dplyr::filter(ts_iomS_all, yearmon >= 2013)
 
-ts_cmeS <- filter(ts_cmeS_all, yearmon < 2013)
-ts_immS <- filter(ts_immS_all, yearmon < 2013)
-ts_iomS <- filter(ts_iomS_all, yearmon < 2013)
+ts_cmeS <- dplyr::filter(ts_cmeS_all, yearmon < 2013)
+ts_immS <- dplyr::filter(ts_immS_all, yearmon < 2013)
+ts_iomS <- dplyr::filter(ts_iomS_all, yearmon < 2013)
 ```
 
 # Task A: Fit Models
