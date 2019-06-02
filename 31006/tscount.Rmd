@@ -3,14 +3,39 @@ title: "Poisson Count Time Series Model on Electric Vehicle Charging"
 subtitle: "31006: Final Project "
 author: "Scott Shepard"
 date: "5/28/2019"
-output: html_document
+output: 
+  html_document:
+    toc: true
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Initial Data Exploration
+# Introduction
+
+This is a notebook for my section of the final project for MScA 31006 Time
+Series Analysis. The prompt is to pick a real-world time series dataset, 
+fit three different models, and compare the results.
+
+For our project we chose an electric vehicle charging dataset from Argonne
+National Labs. This dataset contains the voltage output at a charging station
+for electric vehicles available to employees at Argonne. The data is in 
+15-minute increments and shows the current voltage at that station. The higher
+the voltage, the more cars are charging. In general, about 3.3v equals one
+car.
+
+In this notebook, I fit an Autoregressive Conditional Poisson (ACP) model, also
+called an Integer General Autoregressive Conditional Heteroskedasticity model, 
+to a transformed dataset, then use it to predict the daily average voltage.
+
+# Electric Vehicle Charging Data
+
+1. Read the data
+2. Explore the data
+3. Transform the data
+
+## Data Exploration
 
 Read in the electric vehicle charging data and plot it whole.
 
@@ -51,6 +76,8 @@ df$cars <- round(df$EV / 3.3)
 
 ggplot(tail(df, 2000), aes(x=Time, y=cars)) + geom_line()
 ```
+
+## Data Transformation
 
 Now we want to know how many cars in total there were ofer the course of the day.
 
@@ -100,7 +127,8 @@ c(Summing = sum(df[df$Date == "2017-07-25", ]$cars),
 
 ```{r}
 daily <- group_by(df, Date) %>%
-  do(data.frame(n_cars = count_cars(.)))
+  do(data.frame(n_cars = count_cars(.),
+                sum = sum(.$cars)))
 
 head(daily)
 ```
@@ -118,17 +146,20 @@ How does one week in August compare?
 filter(daily, Date >= '2018-08-01', Date < '2018-08-08') %>%
   ggplot(aes(x=Date, y=n_cars)) + geom_line()
 
+filter(daily, Date >= '2018-08-01', Date < '2018-08-08') %>%
+  ggplot(aes(x=Date, y=sum)) + geom_line()
+
 filter(df, Date >= '2018-08-01', Date < '2018-08-08') %>%
   ggplot(aes(x=Time, y=EV)) + geom_line()
 ```
 
 So it can transform pretty dramatically with lots of up and down.
 
-## Poisson Time Series Modeling
+## Train / Test Split
 
-First split into train and test. The timeseries package I'm using can't 
-handle gaps in the data so I'm using data since the 6/15/18 to avoid
-the large gap in the summer of 2018.
+The final step before modeling is to split into train & test datasets.
+The timeseries package I'm using can'thandle gaps in the data so I'm using 
+data since the 6/15/18 to avoid the large gap in the summer of 2018.
 
 ```{r}
 train <- daily[daily$Date >= '2018-06-15', ]
@@ -136,11 +167,16 @@ test <- train[(round(nrow(train)*.9)):nrow(train),]
 train <- train[1:(round(nrow(train)*.9)-1),]
 
 train$n_cars[is.na(train$n_cars)] <- 0
+train$sum[is.na(train$sum)] <- 0
 
 c(nrow(train), nrow(test))
 ```
 
 With 34 data points in test we are predicting about a month out.
+
+# Poisson Time Series Modeling
+
+## ACP Model
 
 The library `tscount` provides the function `tsglm`. It fits an integer-valued GARCH model of order p and q, abbreviated as INGARCH(p,q). These models are also known as autoregressive conditional Poisson (ACP) models.
 
@@ -149,20 +185,34 @@ I have specificed a seasonality of 1 (daily) and 7 (weekly) to be fitted.
 ```{r}
 library(tscount)
 
-carsfit_pois <- tsglm(
+count_carsfit_pois <- tsglm(
   train$n_cars,  
   model = list(past_obs = c(1, 7)),
   distr="poisson")
 
-summary(carsfit_pois)
+summary(count_carsfit_pois)
+
+sum_carsfit_pois <- tsglm(
+  train$sum,  
+  model = list(past_obs = c(1, 7)),
+  distr="poisson")
+
+summary(sum_carsfit_pois)
 ```
 
 ```{r, fig.height=5, fig.width=8}
 library(reshape2)
 
-train$fitted.values <- carsfit_pois$fitted.values
+train$count.fitted.values <- count_carsfit_pois$fitted.values
+train$sum.fitted.values <- sum_carsfit_pois$fitted.values
 
-melt(train, id.vars='Date') %>%
+melt(train, id.vars='Date', measure.vars = c('count.fitted.values', 'n_cars')) %>%
+  ggplot(aes(x=Date, y=value, color=variable)) + 
+  geom_point() + geom_line() + 
+  theme(legend.position = "top",
+        legend.title = element_blank())
+
+melt(train, id.vars='Date', measure.vars = c('sum.fitted.values', 'sum')) %>%
   ggplot(aes(x=Date, y=value, color=variable)) + 
   geom_point() + geom_line() + 
   theme(legend.position = "top",
@@ -173,27 +223,35 @@ Not bad? It seems like the poisson time series captures the weekend
 zeros pretty well.
 
 ```{r}
-acf(residuals(carsfit_pois))
-plot(residuals(carsfit_pois), type='l')
+acf(residuals(count_carsfit_pois))
+plot(residuals(count_carsfit_pois), type='l')
+```
+
+```{r}
+acf(residuals(sum_carsfit_pois))
+plot(residuals(sum_carsfit_pois), type='l')
 ```
 
 Well hot damn that sure seems to fit well. The residuals look like
 white noise and the ACF chart indicates no autocorrelation.
 
 ```{r}
-Box.test(residuals(carsfit_pois), type='Ljung-Box')
+Box.test(residuals(count_carsfit_pois), type='Ljung-Box')
+Box.test(residuals(sum_carsfit_pois), type='Ljung-Box')
 ```
 
-## Test Error
+## Forecasting with INGARCH / ACP
 
 ```{r}
-tp <- predict(carsfit_pois, 34)
+tp_count <- predict(count_carsfit_pois, 34)
+tp_sum <- predict(sum_carsfit_pois, 34)
 
-test$prediction <- tp$median
+test$count_prediction <- tp_count$median
+test$sum_prediction <- tp_sum$median
 ```
 
 ```{r}
-melt(test, id.vars='Date', measure.vars=c('n_cars', 'prediction')) %>%
+melt(test, id.vars='Date', measure.vars=c('n_cars', 'count_prediction')) %>%
   ggplot(aes(x=Date, y=value, color=variable)) + 
   geom_point() + geom_line() + 
   #geom_bar(stat='identity') + 
@@ -205,7 +263,16 @@ Interesting pattern in the prediictions. It seems to do pretty well
 initially but trend towards the median as we go farther out. I 
 wouldn't trust this prediction beyond one or two weeks.
 
-## Error Estimation
+```{r}
+melt(test, id.vars='Date', measure.vars=c('sum', 'sum_prediction')) %>%
+  ggplot(aes(x=Date, y=value, color=variable)) + 
+  geom_point() + geom_line() + 
+  #geom_bar(stat='identity') + 
+  labs(title='Test Period - Predictions vs. Actuals',
+       subtitle = paste(test$Date[1], 'to', test$Date[nrow(test)]))
+```
+
+## Error Analysis
 
 ```{r}
 week_i <- c()
@@ -251,10 +318,10 @@ symmetric_mean_absolute_percentage_error <- function(preds, actuals) {
 error_df <- group_by(test, week_i) %>%
   do(
     data.frame(
-      rss = residual_sum_of_squares(.$prediction, .$n_cars),
-      mse = mean_squared_error(.$prediction, .$n_cars),
-      mape = mean_absolute_percentage_error(.$prediction, .$n_cars),
-      smape = symmetric_mean_absolute_percentage_error(.$prediction, .$n_cars)
+      rss = residual_sum_of_squares(.$count_prediction, .$n_cars),
+      mse = mean_squared_error(.$count_prediction, .$n_cars),
+      mape = mean_absolute_percentage_error(.$count_prediction, .$n_cars),
+      smape = symmetric_mean_absolute_percentage_error(.$count_prediction, .$n_cars)
   ))
 
 print(error_df)
