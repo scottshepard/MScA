@@ -46,7 +46,8 @@ install.packages(
     "TSA",
     "arifma",
     "MTS",
-    "astsa"
+    "astsa",
+    "fGarch"
   ),
   repos='http://cran.us.r-project.org'
 )

@@ -491,22 +491,86 @@ summary(arfima_iom)
 
 ## ARMA and GARCH combination 
 
+
+GARCH models are used when a time series displays heteroskedasticity, that is,
+non-constant variance. Specifically when the variance of the errors is 
+autocorrelated.
+
+Use the fGarch R library and garchFit()
+
+
 ### CME
 
-```{r}
+```{r, warning=F, message=F}
+acf(ts_cmeS$spline)
+acf(ts_cmeS$spline^2)
 ```
+
+While the ACF of the time series shows autocorrelation, the ACF of the 
+squared time series shows that the variance might also have autocorrelation.
+
+Visual inspection of the residuals of a fitted ARIMA model shows the
+same thing.
+
+```{r}
+plot(residuals(arima_cme), type='p')
+```
+
+The "accordian" pattern we discussed in class is clear here. The variance in
+the residuals of an ARIMA model is not constant, but varies, and looks to
+be autocorrelated (maybe with an intervention).
+
+### Fitting the God Damn GARCH
+
+Nothing is working right now. I've tried garchFit from fGarch and 
+ugarchfit from rugarch. I've tried different solvers and I've tried winsorizing
+(removing outliers) from the dataset. I keep getting failed to converge or
+failed to invert hessian errors.
+
+```{r}
+#library(fGarch)
+
+#garch_cme <- garchFit(~garch(1,1), data=ts(ts_cmeS$spline), trace=F)
+#summary(garch_cme)
+#McLeod.Li.test(y=garch_cme$residuals)
+```
+
+```{r}
+winsor1 <- function (x, fraction=.05)
+{
+   if(length(fraction) != 1 || fraction < 0 ||
+         fraction > 0.5) {
+      stop("bad value for 'fraction'")
+   }
+   lim <- quantile(x, probs=c(fraction, 1-fraction))
+   x[ x < lim[1] ] <- lim[1]
+   x[ x > lim[2] ] <- lim[2]
+   x
+}
+```
+
+```{r}
+#library(rugarch)
+#modelSpec <- ugarchspec(
+#  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)), 
+#  mean.model = list(armaOrder = c(1, 0), include.mean = FALSE), 
+#  distribution.model = "norm")
+
+#garch_cme <- ugarchfit(modelSpec, data=ts_cmeS$spline, solver='hybrid')
+```
+
 
 ### IMM
 
 ```{r}
+
 ```
 
 ### IOM 
 
 ```{r}
-```
 
-Use the fGarch R library and garchFit()
+```
 
 # Task B: Evaluation
 
@@ -517,4 +581,159 @@ smape <- function(act, pred) {
   sm <- abs(act - pred) / ((abs(act) + abs(pred))/2)
   return(sum(sm, na.rm = T) * 100/length(act))
 }
+
+forecast_2013_plot <- function(df_, col, division, model) {
+  SMAPE <- smape(df_$spline, df_[,col])
+  
+  df_ %>%
+    melt(id.vars='yearmon', measure.vars = c('spline', col)) %>%
+    ggplot(aes(x=yearmon, y=value, color=variable)) + 
+    geom_line() +
+    scale_x_yearmon() + 
+    labs(title=paste(model, 'Forecast for 2013', division, 'Seat Price'),
+         subtitle=paste0('SMAPE: ', round(SMAPE, 1), '%'))
+}
 ```
+
+## Linear Regression
+
+```{r}
+ts_cmeS_2013$lm_forecast <- predict(lm_cme, newdata=ts_cmeS_2013)
+forecast_2013_plot(ts_cmeS_2013, 'lm_forecast', 'CME', 'Linear Regression')
+
+ts_immS_2013$lm_forecast <- predict(lm_imm, newdata=ts_immS_2013)
+forecast_2013_plot(ts_immS_2013, 'lm_forecast', 'IMM', 'Linear Regression')
+
+ts_iomS_2013$lm_forecast <- predict(lm_iom, newdata=ts_iomS_2013)
+forecast_2013_plot(ts_iomS_2013, 'lm_forecast', 'IOM', 'Linear Regression')
+
+smape_df <- data.frame(
+  division = c('cme', 'imm', 'iom'),
+  Linear.Regression = c(with(ts_iomS_2013, smape(spline, lm_forecast)),
+                        with(ts_immS_2013, smape(spline, lm_forecast)),
+                        with(ts_cmeS_2013, smape(spline, lm_forecast))))
+```
+
+## Regression with ARIMA Errors
+
+```{r}
+ts_cmeS_2013$lm_arima_forecast <- predict(lm_arima_cme, newxreg=ts_cmeS_2013$floor.vol)$pred
+forecast_2013_plot(ts_cmeS_2013, 'lm_arima_forecast', 'CME', 'ARIMA with Regression Errors')
+
+ts_immS_2013$lm_arima_forecast <- predict(lm_arima_imm, newxreg=ts_immS_2013$floor.vol)$pred
+forecast_2013_plot(ts_immS_2013, 'lm_arima_forecast', 'IMM', 'ARIMA with Regression Errors')
+
+ts_iomS_2013$lm_arima_forecast <- predict(lm_arima_iom, newxreg=ts_iomS_2013$floor.vol)$pred
+forecast_2013_plot(ts_iomS_2013, 'lm_arima_forecast', 'IOM', 'ARIMA with Regression Errors')
+
+smape_df$LM.ARIMA <- c(
+  with(ts_cmeS_2013, smape(spline, lm_arima_forecast)),
+  with(ts_immS_2013, smape(spline, lm_arima_forecast)),
+  with(ts_iomS_2013, smape(spline, lm_arima_forecast))
+)
+```
+
+## Holt-Winters
+
+```{r}
+ts_cmeS_2013$hw_forecast <- forecast(hw_cme, h=12)$mean
+forecast_2013_plot(ts_cmeS_2013, 'hw_forecast', 'CME', 'Holt-Winters')
+
+ts_immS_2013$hw_forecast <- forecast(hw_imm, h=12)$mean
+forecast_2013_plot(ts_immS_2013, 'hw_forecast', 'IMM', 'Holt-Winters')
+
+ts_iomS_2013$hw_forecast <- forecast(hw_iom, h=12)$mean
+forecast_2013_plot(ts_iomS_2013, 'hw_forecast', 'IOM', 'Holt-Winters')
+
+smape_df$Holt.Winters <- c(
+  with(ts_cmeS_2013, smape(spline, hw_forecast)),
+  with(ts_immS_2013, smape(spline, hw_forecast)),
+  with(ts_iomS_2013, smape(spline, hw_forecast))
+)
+```
+
+## ARIMA
+
+```{r, message=F}
+arima_order <- function(fit_) {
+  order <- setNames(fit_$arma, c("p", "q", "P", "Q", "m", "d", "D"))
+  pdq <- order[c('p','d','q')]
+  PDQ <- order[c('P','D','Q')]
+  
+  name <- paste0("ARIMA(", paste(pdq, collapse=","), ")")
+  
+  if(sum(PDQ) > 0) {
+    name <- paste0(name, "(", paste(PDQ, collapse=","), ")", "[", order['m'], "]")
+  }
+  return(name)
+}
+
+
+ts_cmeS_2013$arima_forecast <- forecast(arima_cme, h=12)$mean
+forecast_2013_plot(ts_cmeS_2013, 'arima_forecast', 'CME', arima_order(arima_cme))
+
+ts_immS_2013$arima_forecast <- forecast(arima_imm, h=12)$mean
+forecast_2013_plot(ts_immS_2013, 'arima_forecast', 'IMM', arima_order(arima_imm))
+
+ts_iomS_2013$arima_forecast <- forecast(arima_iom, h=12)$mean
+forecast_2013_plot(ts_iomS_2013, 'arima_forecast', 'IOM', arima_order(arima_iom))
+
+smape_df$ARIMA <- c(
+  with(ts_cmeS_2013, smape(spline, arima_forecast)),
+  with(ts_immS_2013, smape(spline, arima_forecast)),
+  with(ts_iomS_2013, smape(spline, arima_forecast))
+)
+```
+
+## Seasonal ARIMA
+
+```{r, warning=F}
+ts_cmeS_2013$sarima_forecast <- forecast(sarima_cme, h=12)$mean
+forecast_2013_plot(ts_cmeS_2013, 'sarima_forecast', 'CME', arima_order(sarima_cme))
+
+ts_immS_2013$sarima_forecast <- forecast(sarima_imm, h=12)$mean
+forecast_2013_plot(ts_immS_2013, 'sarima_forecast', 'IMM', arima_order(sarima_imm))
+
+ts_iomS_2013$sarima_forecast <- forecast(sarima_iom, h=12)$mean
+forecast_2013_plot(ts_iomS_2013, 'sarima_forecast', 'IOM', arima_order(sarima_iom))
+
+smape_df$SARIMA <- c(
+  with(ts_cmeS_2013, smape(spline, sarima_forecast)),
+  with(ts_immS_2013, smape(spline, sarima_forecast)),
+  with(ts_iomS_2013, smape(spline, sarima_forecast))
+)
+```
+
+## Fractional ARIMA
+
+```{r}
+ts_cmeS_2013$arfima_forecast <- forecast(arfima_cme, h=12)$mean
+forecast_2013_plot(ts_cmeS_2013, 'arfima_forecast', 'CME', 'ARFIMA')
+
+ts_immS_2013$arfima_forecast <- forecast(arfima_imm, h=12)$mean
+forecast_2013_plot(ts_immS_2013, 'arfima_forecast', 'IMM', 'ARFIMA')
+
+ts_iomS_2013$arfima_forecast <- forecast(arfima_iom, h=12)$mean
+forecast_2013_plot(ts_iomS_2013, 'arfima_forecast', 'IOM', 'ARFIMA')
+
+smape_df$ARFIMA <- c(
+  with(ts_cmeS_2013, smape(spline, arfima_forecast)),
+  with(ts_immS_2013, smape(spline, arfima_forecast)),
+  with(ts_iomS_2013, smape(spline, arfima_forecast))
+)
+```
+
+## Garch
+
+```{r}
+
+```
+
+# Recommendation
+
+```{r}
+data.frame(t(smape_df))
+```
+
+I would recommend seasonal ARIMA. While ARIMA did slighly better on the 
+SMAPE metric, it just predicted point forecasts which is silly.
