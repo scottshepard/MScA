@@ -79,68 +79,20 @@ ggplot(tail(df, 2000), aes(x=Time, y=cars)) + geom_line()
 
 Now we want to know how many cars in total there were ofer the course of the day.
 
-We can't just group by date and sum up total number of cars. 
-There could be one or two cars plugged in for the whole day that would 
-register artificually high. We need to count the comings and goings 
-chunk by chunk and add it up for each day.
-
-Actually we need to do both. In order to transform the predictions back into
-voltage readings, a sum count of cars-quarter-hours is a better way 
-to get voltage units.
-
-```{r}
-count_cars <- function(day) {
-  #print(day$Date[1])
-  current_cars <- 0
-  total_cars <- 0
-  if(all(is.na(day$cars))) {
-    return(NA)
-  }
-  if(sum(day$cars,na.rm=T) == 0) {
-    return(0)
-  }
-  for(i in 1:(nrow(day)-1)) {
-    row <- day[i,]
-    if(is.na(row[['cars']])) {
-      next
-    }
-    if(row[['cars']] > current_cars) {
-      total_cars = total_cars + (row[['cars']] - current_cars)
-      current_cars = row[['cars']]
-    } else if(row[['cars']] < current_cars) {
-      current_cars = row[['cars']]
-    }
-  }
-  return(total_cars)
-}
-```
-
-Summing total vs counting jumps
-
-```{r}
-filter(df, Date == '2017-07-25') %>% 
-  ggplot(aes(x=Time, y=cars)) + geom_line() + 
-  labs(title='Number of Cars per 15 minutes',
-       subtitle='7/25/17')
-
-c(Summing = sum(df[df$Date == "2017-07-25", ]$cars),
-  Counting = count_cars(df[df$Date == "2017-07-25", ]))
-```
+Since prediction in the original units is the end-game, instead of getting
+an actual count of cars-per-day, we just want to count car-quarter-hour units.
+It's a measure of energy basically. Then when predictions are finalized, they 
+can be backwards calculated to an average voltage per day.
 
 ```{r}
 daily <- group_by(df, Date) %>%
-  do(data.frame(count_cars = count_cars(.),
-                sum_cars = sum(.$cars)))
+  summarize(cars = sum(cars))
 
 head(daily)
 ```
 
 ```{r}
-ggplot(daily, aes(x=Date, y=count_cars)) + geom_line(stat='identity')
-```
-
-```{r}
-ggplot(daily, aes(x=Date, y=sum_cars)) + geom_line(stat='identity')
+ggplot(daily, aes(x=Date, y=cars)) + geom_line(stat='identity')
 ```
 
 Overall the plot of daily car counts looks pretty similar to 15 minute EV 
@@ -150,16 +102,32 @@ How does one week in August compare?
 
 ```{r}
 filter(daily, Date >= '2018-08-01', Date < '2018-08-08') %>%
-  ggplot(aes(x=Date, y=count_cars)) + geom_line()
-
-filter(daily, Date >= '2018-08-01', Date < '2018-08-08') %>%
-  ggplot(aes(x=Date, y=sum_cars)) + geom_line()
+  ggplot(aes(x=Date, y=cars)) + geom_line()
 
 filter(df, Date >= '2018-08-01', Date < '2018-08-08') %>%
   ggplot(aes(x=Time, y=EV)) + geom_line()
 ```
 
 So it can transform pretty dramatically with lots of up and down.
+
+## 4-hour & Hourly Splits
+
+There is a pretty strong hourly component to the seasonality, with 
+night-time having no charging, morning with high charge and afternoon
+with smaller charge. So grouping by hour and 4-hour chunks might prove to be
+better transformations for the final result.
+
+```{r}
+hourly <- df %>%
+  mutate(hour = as.POSIXlt(Time)$hour) %>%
+  group_by(Date, hour) %>%
+  summarize(cars = sum(cars))
+
+quarter_daily <- df %>%
+  mutate(quarter_day = floor(as.POSIXlt(Time)$hour / 6)) %>%
+  group_by(Date, quarter_day) %>%
+  summarize(cars = sum(cars))
+```
 
 ## Train / Test Split
 
@@ -168,14 +136,20 @@ The timeseries package I'm using can'thandle gaps in the data so I'm using
 data since the 6/15/18 to avoid the large gap in the summer of 2018.
 
 ```{r}
-train <- daily[daily$Date >= '2018-06-15', ]
-test <- train[(round(nrow(train)*.9)):nrow(train),]
-train <- train[1:(round(nrow(train)*.9)-1),]
+min_date <- '2018-06-15'
+test_date <- '2019-04-04'
 
-train$count_cars[is.na(train$count_cars)] <- 0
-train$sum_cars[is.na(train$sum_cars)] <- 0
+daily_train <- daily[(daily$Date >= min_date) & (daily$Date < test_date), ]
+daily_train[is.na(daily_train$cars), ]$cars <- 0
+daily_test  <- daily[daily$Date >= test_date, ]
 
-c(nrow(train), nrow(test))
+hourly_train <- hourly[(hourly$Date >= min_date) & (hourly$Date < test_date), ]
+hourly_train[is.na(hourly_train$cars), ]$cars <- 0
+hourly_test  <- hourly[hourly$Date >= test_date, ]
+
+quarter_daily_train <- quarter_daily[(quarter_daily$Date >= min_date) & (quarter_daily$Date < test_date), ]
+quarter_daily_train[is.na(quarter_daily_train$cars), ]$cars <- 0
+quarter_daily_test  <- quarter_daily[quarter_daily$Date >= test_date, ]
 ```
 
 With 34 data points in test we are predicting about a month out.
@@ -188,38 +162,50 @@ The library `tscount` provides the function `tsglm`. It fits an integer-valued G
 
 I have specificed a seasonality of 1 (daily) and 7 (weekly) to be fitted.
 
-```{r}
+```{r, warning=F, message=F}
 library(tscount)
 
-count_carsfit_pois <- tsglm(
-  train$count_cars,  
+daily_carsfit_pois <- tsglm(
+  daily_train$cars,  
   model = list(past_obs = c(1, 7)),
   distr="poisson")
 
-summary(count_carsfit_pois)
-
-sum_carsfit_pois <- tsglm(
-  train$sum_cars,  
-  model = list(past_obs = c(1, 7)),
+hourly_carsfit_pois <- tsglm(
+  hourly_train$cars,  
+  model = list(past_obs = c(1, 7)*24),
   distr="poisson")
 
-summary(sum_carsfit_pois)
+quarter_daily_carsfit_pois <- tsglm(
+  quarter_daily_train$cars,  
+  model = list(past_obs = c(1, 7)*4),
+  distr="poisson")
 ```
 
 ```{r, fig.height=5, fig.width=8}
 library(reshape2)
 
-train$count.fitted.values <- count_carsfit_pois$fitted.values
-train$sum.fitted.values <- sum_carsfit_pois$fitted.values
-
-melt(train, id.vars='Date', measure.vars = c('count.fitted.values', 'count_cars')) %>%
+daily_train$fitted.values <- daily_carsfit_pois$fitted.values
+daily_train %>% 
+  melt(id.vars='Date', measure.vars = c('fitted.values', 'cars')) %>%
   ggplot(aes(x=Date, y=value, color=variable)) + 
   geom_point() + geom_line() + 
   theme(legend.position = "top",
         legend.title = element_blank())
 
-melt(train, id.vars='Date', measure.vars = c('sum.fitted.values', 'sum_cars')) %>%
-  ggplot(aes(x=Date, y=value, color=variable)) + 
+hourly_train$fitted.values <- hourly_carsfit_pois$fitted.values
+hourly_train %>% 
+  mutate(hour = paste0(Date, '-', hour)) %>%
+  melt(id.vars='hour', measure.vars = c('fitted.values', 'cars')) %>%
+  ggplot(aes(x=hour, y=value, color=variable)) + 
+  geom_point() + geom_line() + 
+  theme(legend.position = "top",
+        legend.title = element_blank())
+
+quarter_daily_train$fitted.values <- quarter_daily_carsfit_pois$fitted.values
+quarter_daily_train %>% 
+  mutate(quarter = paste0(Date, quarter_day)) %>%
+  melt(id.vars='quarter', measure.vars = c('fitted.values', 'cars')) %>%
+  ggplot(aes(x=quarter, y=value, color=variable)) + 
   geom_point() + geom_line() + 
   theme(legend.position = "top",
         legend.title = element_blank())
@@ -229,76 +215,63 @@ Not bad? It seems like the poisson time series captures the weekend
 zeros pretty well.
 
 ```{r}
-acf(residuals(count_carsfit_pois))
-plot(residuals(count_carsfit_pois), type='l')
+acf(residuals(daily_carsfit_pois))
+plot(residuals(daily_carsfit_pois), type='l')
 ```
 
-```{r}
-acf(residuals(sum_carsfit_pois))
-plot(residuals(sum_carsfit_pois), type='l')
-```
 
 Well hot damn that sure seems to fit well. The residuals look like
 white noise and the ACF chart indicates no autocorrelation. Though there is 
 quite a bit of heteroskedasticity.
 
 ```{r}
-Box.test(residuals(count_carsfit_pois), type='Ljung-Box')
-Box.test(residuals(sum_carsfit_pois), type='Ljung-Box')
+Box.test(residuals(daily_carsfit_pois), type='Ljung-Box')
 ```
 
 ## Forecasting with INGARCH / ACP
 
 ```{r}
-tp_count <- predict(count_carsfit_pois, 34)
-tp_sum <- predict(sum_carsfit_pois, 34)
-
-test$count_prediction <- tp_count$median
-test$sum_prediction <- tp_sum$median
+daily_test$prediction <- predict(daily_carsfit_pois, nrow(daily_test))$median
+hourly_test$prediction <- predict(hourly_carsfit_pois, nrow(hourly_test))$median
+quarter_daily_test$prediction <- predict(quarter_daily_carsfit_pois, nrow(quarter_daily_test))$median
 ```
 
 ```{r}
-melt(test, id.vars='Date', measure.vars=c('count_cars', 'count_prediction')) %>%
+daily_test %>% 
+  melt(id.vars='Date', measure.vars=c('cars', 'prediction')) %>%
   ggplot(aes(x=Date, y=value, color=variable)) + 
   geom_point() + geom_line() + 
-  #geom_bar(stat='identity') + 
   labs(title='Test Period - Predictions vs. Actuals',
-       subtitle = paste(test$Date[1], 'to', test$Date[nrow(test)]))
+       subtitle = paste(test_date, 'to', max(df$Date)))
 ```
 
-Interesting pattern in the prediictions. It seems to do pretty well
+Interesting pattern in the predictions. It seems to do pretty well
 initially but trend towards the median as we go farther out. I 
 wouldn't trust this prediction beyond one or two weeks.
 
 ```{r}
-melt(test, id.vars='Date', measure.vars=c('sum_cars', 'sum_prediction')) %>%
-  ggplot(aes(x=Date, y=value, color=variable)) + 
+hourly_test$Time <- with(hourly_test, as.POSIXct(paste0(Date, " ", hour, ":00:00")))
+hourly_test %>%
+  melt(id.vars='Time', measure.vars=c('cars', 'prediction')) %>%
+  ggplot(aes(x=Time, y=value, color=variable)) + 
   geom_point() + geom_line() + 
-  #geom_bar(stat='identity') + 
   labs(title='Test Period - Predictions vs. Actuals',
-       subtitle = paste(test$Date[1], 'to', test$Date[nrow(test)]))
+       subtitle = paste(test_date, 'to', max(df$Date)))
+```
+
+```{r}
+quarter_daily_test$Time <- with(quarter_daily_test, as.POSIXct(paste0(Date, " ", (quarter_day+1)*4, ":00:00")))
+quarter_daily_test %>%
+  melt(id.vars='Time', measure.vars=c('cars', 'prediction')) %>%
+  ggplot(aes(x=Time, y=value, color=variable)) + 
+  geom_point() + geom_line() + 
+  labs(title='Test Period - Predictions vs. Actuals',
+       subtitle = paste(test_date, 'to', max(df$Date)))
 ```
 
 ## Error Analysis
 
 ```{r}
-residual_sum_of_squares <- function(preds, actuals) {
-  residuals <- actuals - preds
-  sum(residuals**2)
-}
-
-mean_squared_error <- function(preds, actuals) {
-  residual_sum_of_squares(preds, actuals) / length(preds)
-}
-
-mean_absolute_percentage_error <- function(preds, actuals) {
-  residuals <- actuals - preds
-  if(any(actuals == 0)) {
-    actuals[actuals == 0] <- 1
-  }
-  100 / length(residuals) * sum(abs(residuals)/ actuals)
-}
-
 smape <- function(actual, pred){
 
    N <- length(actual)
@@ -313,81 +286,119 @@ smape <- function(actual, pred){
 }
 ```
 
+First compute SMAPE by the transformed set.
+
 ```{r}
-week_i <- c()
-i <- 1
-while(length(week_i) < nrow(test)) {
-  week_i <- c(week_i, rep(i,7))
-  i = i + 1
+smape(daily_test$cars, daily_test$prediction)
+smape(hourly_test$cars, hourly_test$prediction)
+smape(quarter_daily_test$cars, quarter_daily_test$prediction)
+```
+
+```{r}
+week_index <- function(n, frequency=7) {
+  week_i <- c() 
+  i <- 1
+  while(length(week_i) < n) {
+    week_i <- c(week_i, rep(i,frequency))
+    i = i + 1
+  }
+  week_i[1:n]
 }
-week_i <- week_i[1:nrow(test)]
-test$week_i <- week_i
 
-count_error_df <- group_by(test, week_i) %>%
-  do(
-    data.frame(
-      rss = residual_sum_of_squares(.$count_prediction, .$count_cars),
-      mse = mean_squared_error(.$count_prediction, .$count_cars),
-      mape = mean_absolute_percentage_error(.$count_prediction, .$count_cars),
-      smape = smape(.$count_prediction, .$count_cars)
-  ))
+daily_test$week_i <- week_index(nrow(daily_test), 7)
+hourly_test$week_i <- week_index(nrow(hourly_test), 7*24)
+quarter_daily_test$week_i <- week_index(nrow(quarter_daily_test), 7*24/6)
 
-sum_error_df <- group_by(test, week_i) %>%
-  do(
-    data.frame(
-      rss = residual_sum_of_squares(.$sum_prediction, .$sum_cars),
-      mse = mean_squared_error(.$sum_prediction, .$sum_cars),
-      mape = mean_absolute_percentage_error(.$sum_prediction, .$sum_cars),
-      smape = smape(.$sum_prediction, .$sum_cars)
-  ))
+group_by(daily_test, week_i) %>%
+  summarize(smape(cars, prediction))
 
-print(count_error_df)
-print(sum_error_df)
+group_by(hourly_test, week_i) %>%
+  summarize(smape(cars, prediction))
+
+group_by(quarter_daily_test, week_i) %>%
+  summarize(smape(cars, prediction))
 ```
 
 Initial small errors turn into hot garbage pretty quickly.
 
 ## Prediction in EV Units
 
+Turn the predicted values back into voltage to get a final SMAPE value.
+
 ```{r}
-test_ev <- df[df$Date >= min(test$Date),]
-test$ev_prediction <- test$sum_cars * 3.3 / 24 / 4
+test <- df[df$Date >= test_date,]
 
+test$week_i <- week_index(nrow(test), 7*24*4)
 
-test_ev <- select(test, Date, week_i, ev_prediction) %>% merge(test_ev, by='Date', all=T)
+test <- test %>%
+  mutate(quarter_day = floor(as.POSIXlt(Time)$hour / 6),
+         hour = floor(as.POSIXlt(Time)$hour))
 
-test_ev %>% 
-  melt(id.vars=c('Time'), measure.vars=c('ev_prediction', 'EV')) %>%
-  ggplot(aes(x=Time, y=value, color=variable)) + geom_line() +
-  labs(y='Charging Voltage') +
-  theme(axis.title.x = element_blank())
+y <- daily_test %>% 
+  mutate(daily_prediction = prediction / 24 / 4 * 3.3) %>% 
+  select(Date, daily_prediction)
+test <- left_join(test, y, by=c('Date'))
+
+y <- hourly_test %>% 
+  mutate(hourly_prediction = prediction / 4 * 3.3) %>% 
+  select(Date, hour, hourly_prediction)
+test <- left_join(test, y, by=c('Date', 'hour'))
+
+y <- quarter_daily_test %>% 
+  mutate(quarter_daily_prediction = prediction / 6 / 4 * 3.3) %>% 
+  select(Date, quarter_day, quarter_daily_prediction)
+test <- left_join(test, y, by=c('Date', 'quarter_day'))
+
+head(test)
 ```
 
 ```{r}
-smape(test_ev$EV, test_ev$ev_prediction)
+with(test, smape(EV, daily_prediction))
+with(test, smape(EV, hourly_prediction))
+with(test, smape(EV, quarter_daily_prediction))
 
-group_by(test_ev, week_i) %>%
-  summarize(smape(EV, ev_prediction))
+group_by(test, week_i) %>%
+  summarize(smape(EV, daily_prediction))
+
+group_by(test, week_i) %>%
+  summarize(smape(EV, hourly_prediction))
+
+group_by(test, week_i) %>%
+  summarize(smape(EV, quarter_daily_prediction))
 ```
 
-## Quarter-hour count dataset
+```{r}
+test %>% 
+  melt(id.vars='Time', measure.vars=c('EV', 'daily_prediction', 'hourly_prediction', 'quarter_daily_prediction')) %>%
+  ggplot(aes(x=Time, y=value, color=variable)) +
+  geom_line()
+```
 
 ```{r}
-qh_train <- df[df$Date < min(test$Date) & df$Date > '2018-06-15',]
-qh_train[is.na(qh_train$cars),]$cars <- 0
-qh_test <- df[df$Date >= min(test$Date),]
+str_pad_custom <- function(labels){
+  new_labels <- stringr::str_pad(labels, 10, "right")
+  return(new_labels)
+}
 
-count_carsfit_pois <- tsglm(
-  qh_train$cars,  
-  model = list(past_obs = c(1, 4, 360, 2520)),
-  distr="poisson")
+test %>% 
+  melt(id.vars='Time', measure.vars=c('EV', 'quarter_daily_prediction')) %>%
+  ggplot(aes(x=Time, y=value, color=variable)) +
+  geom_line() + 
+  scale_color_manual(labels  = c('Actuals   ', 'Forecast'),
+                     values=c('Maroon', 'Blue4')) +
+  theme(legend.position = 'bottom',
+        axis.title.x=element_blank(),
+        legend.title = element_blank(),
+        legend.spacing.x = unit(0.25,'cm')) +
+  labs(title='Autoregressive Conditional Poisson Forecast', 
+       subtitle = paste(test_date, 'to', max(df$Date)),
+       y='EV Charging Power')
+```
 
-qh_test$cars_pred <- predict(count_carsfit_pois, nrow(qh_test))$median
-qh_test$ev_pred <- qh_test$cars_pred * 3.3
+```{r}
 
-qh_test %>% 
-  melt(id.vars=c('Time'), measure.vars=c('ev_pred', 'EV')) %>%
-  ggplot(aes(x=Time, y=value, color=variable)) + geom_line() +
-  labs(y='Charging Voltage') +
-  theme(axis.title.x = element_blank())
+test$quarter_daily_residuals<- with(test, EV - quarter_daily_prediction)
+
+ggplot(test, aes(x=Time, y=quarter_daily_residuals)) + 
+  geom_line()
 ```
