@@ -2,7 +2,9 @@
 title: "Assignment 8"
 author: "Scott Shepard"
 date: "6/1/2019"
-output: html_document
+output:
+  github_document:
+    toc: true
 ---
 
 ```{r setup, include=FALSE}
@@ -233,14 +235,12 @@ c(hw_cme$alpha, hw_cme$beta, hw_cme$gamma)
 
 ```{r}
 hw_imm <- HoltWinters(ts(ts_immS$spline, start=2001, frequency = 12))
-c(hw_imm$alpha, hw_imm$beta, hw_imm$gamma)
 ```
 
 ### IOM 
 
 ```{r}
 hw_iom <- HoltWinters(ts(ts_iomS$spline, start=2001, frequency = 12))
-c(hw_iom$alpha, hw_iom$beta, hw_iom$gamma)
 ```
 
 ## ARIMA
@@ -250,10 +250,6 @@ c(hw_iom$alpha, hw_iom$beta, hw_iom$gamma)
 ```{r}
 arima_cme <- auto.arima(ts_cmeS$spline, seasonal = F)
 summary(arima_cme)
-```
-
-```{r}
-auto.arima(ts(ts_cmeS$spline, start=2001, frequency = 12), seasonal = F)
 ```
 
 ### IMM
@@ -266,7 +262,6 @@ arima_imm <- auto.arima(ts_immS$spline, seasonal = F)
 
 ```{r}
 arima_iom <- auto.arima(ts_iomS$spline, seasonal = F)
-summary(arima_iom)
 ```
 
 ## Seasonal ARIMA 
@@ -309,10 +304,6 @@ I again manually fit one. This time the results were slightly different.
 sarima_imm <- ts_immS$spline %>%
   ts(start=2001, frequency = 12) %>% 
   Arima(order=c(c(0,1,1)), seasonal=c(0,0,1))
-
-checkresiduals(sarima_imm)
-
-summary(sarima_imm)
 ```
 
 That's fine. This model only needed a c(0,1,1) non-seasonal model where the CME
@@ -420,6 +411,8 @@ garch_cme <- garchFit(~arma(1,0)+garch(1,1),
 summary(garch_cme)
 McLeod.Li.test(y=residuals(garch_cme))
 ```
+
+The null hypothesis, that is is no ARCH among lags, can be safely rejected.
 
 ### IMM
 
@@ -619,3 +612,5 @@ data.frame(t(smape_df))
 
 I would recommend seasonal ARIMA. While ARIMA did slighly better on the 
 SMAPE metric, it just predicted point forecasts which is silly.
+
+All the models did pretty poorly though. 
