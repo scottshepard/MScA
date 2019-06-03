@@ -3,7 +3,7 @@ title: "Assignment 8"
 author: "Scott Shepard"
 date: "6/1/2019"
 output: 
-  html_document:
+  github_document:
     toc: true
 ---
 
@@ -171,7 +171,7 @@ ggplot(monthly_vol, aes(x=yearmon, y=floor.vol, color=Division)) +
        y='Floor Volume', x='Time')
 ```
 
-```{r}
+```{r, warning=F, message=F}
 attach_monthly_vol <- function(ts_df, division, monthly_df = monthly_vol) {
   monthly_df <- dplyr::filter(monthly_df, Division==division)
   monthly_df <- select(monthly_df, -Division)
@@ -190,7 +190,7 @@ head(ts_cmeS_all)
 Before fitting any models, remove the 2013 year from the timeseries objects
 and keep the 2013 year as the values to judge the forecasts.
 
-```{r}
+```{r, warning=F, message=F}
 ts_cmeS_2013 <- dplyr::filter(ts_cmeS_all, yearmon >= 2013)
 ts_immS_2013 <- dplyr::filter(ts_immS_all, yearmon >= 2013)
 ts_iomS_2013 <- dplyr::filter(ts_iomS_all, yearmon >= 2013)
@@ -208,7 +208,7 @@ Seat price is independent, Volume dependent
 
 ### CME
 
-```{r}
+```{r, warning=F, message=F}
 lm_cme <- lm(spline ~ floor.vol, data=ts_cmeS)
 summary(lm_cme)
 
@@ -246,7 +246,7 @@ ts_with_floor_vol_plot(ts_cmeS, 'CME')
 
 ### IMM
 
-```{r}
+```{r, warning=F, message=F}
 lm_imm <- lm(spline ~ floor.vol, data=ts_immS)
 summary(lm_imm)
 
@@ -278,14 +278,14 @@ summary(lm_arima_cme)
 
 ### IMM
 
-```{r}
+```{r, warning=F, message=F}
 lm_arima_imm <- auto.arima(ts_immS$spline, xreg=ts_immS$floor.vol)
 summary(lm_arima_imm)
 ```
 
 ### IOM
 
-```{r}
+```{r, warning=F, message=F}
 lm_arima_iom <- auto.arima(ts_iomS$spline, xreg=ts_iomS$floor.vol)
 summary(lm_arima_iom)
 ```
@@ -294,21 +294,21 @@ summary(lm_arima_iom)
 
 ### CME
 
-```{r}
+```{r, warning=F, message=F}
 hw_cme <- HoltWinters(ts(ts_cmeS$spline, start=2001, frequency = 12))
 c(hw_cme$alpha, hw_cme$beta, hw_cme$gamma)
 ```
 
 ### IMM
 
-```{r}
+```{r, warning=F, message=F}
 hw_imm <- HoltWinters(ts(ts_immS$spline, start=2001, frequency = 12))
 c(hw_imm$alpha, hw_imm$beta, hw_imm$gamma)
 ```
 
 ### IOM 
 
-```{r}
+```{r, warning=F, message=F}
 hw_iom <- HoltWinters(ts(ts_iomS$spline, start=2001, frequency = 12))
 c(hw_iom$alpha, hw_iom$beta, hw_iom$gamma)
 ```
@@ -317,25 +317,25 @@ c(hw_iom$alpha, hw_iom$beta, hw_iom$gamma)
 
 ### CME
 
-```{r}
+```{r, warning=F, message=F}
 arima_cme <- auto.arima(ts_cmeS$spline, seasonal = F)
 summary(arima_cme)
 ```
 
-```{r}
+```{r, warning=F, message=F}
 auto.arima(ts(ts_cmeS$spline, start=2001, frequency = 12), seasonal = F)
 ```
 
 ### IMM
 
-```{r}
+```{r, warning=F, message=F}
 arima_imm <- auto.arima(ts_immS$spline, seasonal = F)
 summary(arima_imm)
 ```
 
 ### IOM 
 
-```{r}
+```{r, warning=F, message=F}
 arima_iom <- auto.arima(ts_iomS$spline, seasonal = F)
 summary(arima_iom)
 ```
@@ -346,7 +346,7 @@ Seasonality is monthly
 
 ### CME
 
-```{r}
+```{r, warning=F, message=F}
 auto.arima(ts(ts_cmeS$spline, start=2001, frequency = 12))
 ```
 
@@ -356,7 +356,7 @@ one.
 
 First plot with a difference and a lagged seasonal (12 month) difference.
 
-```{r}
+```{r, warning=F, message=F}
 ts_cmeS$spline %>% 
   ts(start=2001, frequency = 12) %>% 
   diff(lag=12) %>%
@@ -364,7 +364,7 @@ ts_cmeS$spline %>%
   ggtsdisplay()
 ```
 
-```{r}
+```{r, warning=F, message=F}
 ts_cmeS$spline %>%
   ts(start=2001, frequency = 12) %>% 
   Arima(order=c(c(0,1,1)), seasonal=c(0,0,1)) %>%
@@ -374,7 +374,7 @@ ts_cmeS$spline %>%
 
 A significant spike at lag 2 indicates an additional non-seasoanl term is needed.
 
-```{r}
+```{r, warning=F, message=F}
 sarima_cme <- ts_cmeS$spline %>%
   ts(start=2001, frequency = 12) %>% 
   Arima(order=c(c(0,1,2)), seasonal=c(0,0,1))
@@ -388,14 +388,14 @@ That's okay enough I think. It's not great but it's okay.
 
 ### IMM
 
-```{r}
+```{r, warning=F, message=F}
 auto.arima(ts(ts_immS$spline, start=2001, frequency = 12))
 ```
 
 Ugh not this again. Okay do the same thing as with CME. The ARIMA for this 
 model was of the order c(0,1,1) so start with that plus some seasonality terms.
 
-```{r}
+```{r, warning=F, message=F}
 ts_immS$spline %>%
   ts(start=2001, frequency = 12) %>% 
   Arima(order=c(c(0,1,1)), seasonal=c(0,0,1)) %>%
@@ -403,7 +403,7 @@ ts_immS$spline %>%
   ggtsdisplay()
 ```
 
-```{r}
+```{r, warning=F, message=F}
 sarima_imm <- ts_immS$spline %>%
   ts(start=2001, frequency = 12) %>% 
   Arima(order=c(c(0,1,1)), seasonal=c(0,0,1))
@@ -418,13 +418,13 @@ series needed a c(0,1,2). I think that's interesting.
 
 ### IOM 
 
-```{r}
+```{r, warning=F, message=F}
 auto.arima(ts(ts_iomS$spline, start=2001, frequency = 12))
 ```
 
 Swell. This picked up a seaonality term all its own. We'll go with that.
 
-```{r}
+```{r, warning=F, message=F}
 sarima_iom <- ts_iomS$spline %>%
   ts(start=2001, frequency = 12) %>% 
   Arima(order=c(c(0,1,1)), seasonal=c(0,0,1))
@@ -447,7 +447,7 @@ values.
 Simulate a fractional ARIMA and plot the ACF of it against he ACF of the CME
 time series so that it is easy to see if they are similar or dissimilar.
 
-```{r}
+```{r, warning=F, message=F}
 library(fracdiff)
 
 ts.test <- fracdiff.sim( 1000, ar = .55, ma = -.4, d = .3) 
@@ -459,7 +459,7 @@ acf(ts_cmeS$spline, lag=50)
 
 Looks to me like a slowly decaying ACF plot. Next, fit the ARFIMA.
 
-```{r}
+```{r, warning=F, message=F}
 arfima_cme <- arfima(ts(ts_cmeS$spline, start=2001, frequency = 12))
 
 summary(arfima_cme)
@@ -467,11 +467,11 @@ summary(arfima_cme)
 
 ### IMM
 
-```{r}
+```{r, warning=F, message=F}
 acf(ts_immS$spline, lag=50)
 ```
 
-```{r}
+```{r, warning=F, message=F}
 arfima_imm <- arfima(ts_immS$spline)
 
 summary(arfima_imm)
@@ -479,11 +479,11 @@ summary(arfima_imm)
 
 ### IOM 
 
-```{r}
+```{r, warning=F, message=F}
 acf(ts_iomS$spline, lag=50)
 ```
 
-```{r}
+```{r, warning=F, message=F}
 arfima_iom <- arfima(ts_iomS$spline)
 
 summary(arfima_iom)
@@ -512,7 +512,7 @@ squared time series shows that the variance might also have autocorrelation.
 Visual inspection of the residuals of a fitted ARIMA model shows the
 same thing.
 
-```{r}
+```{r, warning=F, message=F}
 plot(residuals(arima_cme), type='p')
 ```
 
@@ -527,7 +527,7 @@ ugarchfit from rugarch. I've tried different solvers and I've tried winsorizing
 (removing outliers) from the dataset. I keep getting failed to converge or
 failed to invert hessian errors.
 
-```{r}
+```{r, warning=F, message=F}
 library(fGarch)
 library(TSA)
 
@@ -540,7 +540,7 @@ McLeod.Li.test(y=residuals(garch_cme))
 
 ### IMM
 
-```{r}
+```{r, warning=F, message=F}
 # garch_imm <- garchFit(~arma(0,1)+garch(1,1), 
 #                       data=ts(ts_immS$spline, frequency = 12), 
 #                       trace=F)
@@ -550,7 +550,7 @@ McLeod.Li.test(y=residuals(garch_cme))
 
 ### IOM 
 
-```{r}
+```{r, warning=F, message=F}
 # garch_iom <- garchFit(~arma(0,1)+garch(1,1), 
 #                       data=ts(ts_iomS$spline, frequency = 12), 
 #                       trace=F)
@@ -562,7 +562,7 @@ McLeod.Li.test(y=residuals(garch_cme))
 
 Evaluated each model with sMAPE
 
-```{r}
+```{r, warning=F, message=F}
 smape <- function(act, pred) {
   sm <- abs(act - pred) / ((abs(act) + abs(pred))/2)
   return(sum(sm, na.rm = T) * 100/length(act))
@@ -583,7 +583,7 @@ forecast_2013_plot <- function(df_, col, division, model) {
 
 ## Linear Regression
 
-```{r}
+```{r, warning=F, message=F}
 ts_cmeS_2013$lm_forecast <- predict(lm_cme, newdata=ts_cmeS_2013)
 forecast_2013_plot(ts_cmeS_2013, 'lm_forecast', 'CME', 'Linear Regression')
 
@@ -602,7 +602,7 @@ smape_df <- data.frame(
 
 ## Regression with ARIMA Errors
 
-```{r}
+```{r, warning=F, message=F}
 ts_cmeS_2013$lm_arima_forecast <- predict(lm_arima_cme, newxreg=ts_cmeS_2013$floor.vol)$pred
 forecast_2013_plot(ts_cmeS_2013, 'lm_arima_forecast', 'CME', 'ARIMA with Regression Errors')
 
@@ -621,7 +621,7 @@ smape_df$LM.ARIMA <- c(
 
 ## Holt-Winters
 
-```{r}
+```{r, warning=F, message=F}
 ts_cmeS_2013$hw_forecast <- forecast(hw_cme, h=12)$mean
 forecast_2013_plot(ts_cmeS_2013, 'hw_forecast', 'CME', 'Holt-Winters')
 
@@ -640,7 +640,7 @@ smape_df$Holt.Winters <- c(
 
 ## ARIMA
 
-```{r, message=F}
+```{r, message=F, warning=F}
 arima_order <- function(fit_) {
   order <- setNames(fit_$arma, c("p", "q", "P", "Q", "m", "d", "D"))
   pdq <- order[c('p','d','q')]
@@ -673,7 +673,7 @@ smape_df$ARIMA <- c(
 
 ## Seasonal ARIMA
 
-```{r, warning=F}
+```{r, warning=F, warning=F}
 ts_cmeS_2013$sarima_forecast <- forecast(sarima_cme, h=12)$mean
 forecast_2013_plot(ts_cmeS_2013, 'sarima_forecast', 'CME', arima_order(sarima_cme))
 
@@ -692,7 +692,7 @@ smape_df$SARIMA <- c(
 
 ## Fractional ARIMA
 
-```{r}
+```{r, warning=F, message=F}
 ts_cmeS_2013$arfima_forecast <- forecast(arfima_cme, h=12)$mean
 forecast_2013_plot(ts_cmeS_2013, 'arfima_forecast', 'CME', 'ARFIMA')
 
@@ -711,7 +711,7 @@ smape_df$ARFIMA <- c(
 
 ## Garch
 
-```{r}
+```{r, warning=F, message=F}
 ts_cmeS_2013$garch_forecast <- predict(garch_cme, 12)$meanForecast
 forecast_2013_plot(ts_cmeS_2013, 'garch_forecast', 'CME', 'GARCH')
 
@@ -730,7 +730,7 @@ smape_df$GARCH <- c(
 
 # Recommendation
 
-```{r}
+```{r, warning=F, message=F}
 data.frame(t(smape_df))
 ```
 
