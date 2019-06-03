@@ -137,7 +137,7 @@ data since the 6/15/18 to avoid the large gap in the summer of 2018.
 
 ```{r}
 min_date <- '2018-06-15'
-test_date <- '2019-04-04'
+test_date <- '2019-04-08'
 
 daily_train <- daily[(daily$Date >= min_date) & (daily$Date < test_date), ]
 daily_train[is.na(daily_train$cars), ]$cars <- 0
@@ -310,13 +310,13 @@ hourly_test$week_i <- week_index(nrow(hourly_test), 7*24)
 quarter_daily_test$week_i <- week_index(nrow(quarter_daily_test), 7*24/6)
 
 group_by(daily_test, week_i) %>%
-  summarize(smape(cars, prediction))
+  summarize(smape = smape(cars, prediction))
 
 group_by(hourly_test, week_i) %>%
-  summarize(smape(cars, prediction))
+  summarize(smape = smape(cars, prediction))
 
 group_by(quarter_daily_test, week_i) %>%
-  summarize(smape(cars, prediction))
+  summarize(smape = smape(cars, prediction))
 ```
 
 Initial small errors turn into hot garbage pretty quickly.
@@ -358,13 +358,14 @@ with(test, smape(EV, hourly_prediction))
 with(test, smape(EV, quarter_daily_prediction))
 
 group_by(test, week_i) %>%
-  summarize(smape(EV, daily_prediction))
+  summarize(smape=smape(EV, daily_prediction))
 
 group_by(test, week_i) %>%
-  summarize(smape(EV, hourly_prediction))
+  summarize(smape=smape(EV, hourly_prediction))
 
 group_by(test, week_i) %>%
-  summarize(smape(EV, quarter_daily_prediction))
+  summarize(smape=smape(EV, quarter_daily_prediction)) %>%
+  data.frame()
 ```
 
 ```{r}
@@ -380,25 +381,42 @@ str_pad_custom <- function(labels){
   return(new_labels)
 }
 
-test %>% 
+quarter_daily_forecast_plot <- test %>% 
   melt(id.vars='Time', measure.vars=c('EV', 'quarter_daily_prediction')) %>%
   ggplot(aes(x=Time, y=value, color=variable)) +
   geom_line() + 
   scale_color_manual(labels  = c('Actuals   ', 'Forecast'),
                      values=c('Maroon', 'Blue4')) +
-  theme(legend.position = 'bottom',
+  theme(legend.position = 'top',
         axis.title.x=element_blank(),
         legend.title = element_blank(),
         legend.spacing.x = unit(0.25,'cm')) +
   labs(title='Autoregressive Conditional Poisson Forecast', 
        subtitle = paste(test_date, 'to', max(df$Date)),
        y='EV Charging Power')
+quarter_daily_forecast_plot
 ```
 
 ```{r}
-
 test$quarter_daily_residuals<- with(test, EV - quarter_daily_prediction)
 
-ggplot(test, aes(x=Time, y=quarter_daily_residuals)) + 
-  geom_line()
+quarter_daily_residual_plot <- test %>% 
+  ggplot(aes(x=Time, y=quarter_daily_residuals)) + 
+  geom_line() + 
+  labs(y='Acutals - Prediction', x='',
+       title='Residuals on ACP Model', 
+       axis.title.x=element_blank())
+quarter_daily_residual_plot
+```
+
+
+```{r}
+library(grid)
+library(gridExtra)
+
+grid.arrange(
+  grobs = list(quarter_daily_forecast_plot, quarter_daily_residual_plot),
+  heights = c(3,2),
+  layout_matrix = rbind(c(1), c(2))
+)
 ```
