@@ -528,48 +528,34 @@ ugarchfit from rugarch. I've tried different solvers and I've tried winsorizing
 failed to invert hessian errors.
 
 ```{r}
-#library(fGarch)
+library(fGarch)
+library(TSA)
 
-#garch_cme <- garchFit(~garch(1,1), data=ts(ts_cmeS$spline), trace=F)
-#summary(garch_cme)
-#McLeod.Li.test(y=garch_cme$residuals)
+garch_cme <- garchFit(~arma(1,1)+garch(1,1), 
+                      data=ts(ts_cmeS$spline, frequency = 12), 
+                      trace=F)
+summary(garch_cme)
+McLeod.Li.test(y=residuals(garch_cme))
 ```
-
-```{r}
-winsor1 <- function (x, fraction=.05)
-{
-   if(length(fraction) != 1 || fraction < 0 ||
-         fraction > 0.5) {
-      stop("bad value for 'fraction'")
-   }
-   lim <- quantile(x, probs=c(fraction, 1-fraction))
-   x[ x < lim[1] ] <- lim[1]
-   x[ x > lim[2] ] <- lim[2]
-   x
-}
-```
-
-```{r}
-#library(rugarch)
-#modelSpec <- ugarchspec(
-#  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)), 
-#  mean.model = list(armaOrder = c(1, 0), include.mean = FALSE), 
-#  distribution.model = "norm")
-
-#garch_cme <- ugarchfit(modelSpec, data=ts_cmeS$spline, solver='hybrid')
-```
-
 
 ### IMM
 
 ```{r}
-
+# garch_imm <- garchFit(~arma(0,1)+garch(1,1), 
+#                       data=ts(ts_immS$spline, frequency = 12), 
+#                       trace=F)
+# summary(garch_imm)
+# McLeod.Li.test(y=residuals(garch_imm))
 ```
 
 ### IOM 
 
 ```{r}
-
+# garch_iom <- garchFit(~arma(0,1)+garch(1,1), 
+#                       data=ts(ts_iomS$spline, frequency = 12), 
+#                       trace=F)
+# summary(garch_iom)
+# McLeod.Li.test(y=residuals(garch_iom))
 ```
 
 # Task B: Evaluation
@@ -608,7 +594,7 @@ ts_iomS_2013$lm_forecast <- predict(lm_iom, newdata=ts_iomS_2013)
 forecast_2013_plot(ts_iomS_2013, 'lm_forecast', 'IOM', 'Linear Regression')
 
 smape_df <- data.frame(
-  division = c('cme', 'imm', 'iom'),
+  row.names = c('cme', 'imm', 'iom'),
   Linear.Regression = c(with(ts_iomS_2013, smape(spline, lm_forecast)),
                         with(ts_immS_2013, smape(spline, lm_forecast)),
                         with(ts_cmeS_2013, smape(spline, lm_forecast))))
@@ -726,7 +712,20 @@ smape_df$ARFIMA <- c(
 ## Garch
 
 ```{r}
+ts_cmeS_2013$garch_forecast <- predict(garch_cme, 12)$meanForecast
+forecast_2013_plot(ts_cmeS_2013, 'garch_forecast', 'CME', 'GARCH')
 
+#ts_cmeS_2013$garch_forecast <- predict(garch_imm, 12)$meanForecast
+#forecast_2013_plot(ts_immS_2013, 'garch_forecast', 'IMM', 'GARCH')
+
+#ts_cmeS_2013$garch_forecast <- predict(garch_iom, 12)$meanForecast
+#forecast_2013_plot(ts_iomS_2013, 'garch_forecast', 'IOM', 'GARCH')
+
+smape_df$GARCH <- c(
+  with(ts_cmeS_2013, smape(spline, garch_forecast)),
+  NA,#with(ts_immS_2013, smape(spline, arfima_forecast))
+  NA #with(ts_iomS_2013, smape(spline, arfima_forecast))
+)
 ```
 
 # Recommendation
