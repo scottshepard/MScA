@@ -1,0 +1,738 @@
+---
+title: "Assignment 8"
+author: "Scott Shepard"
+date: "6/1/2019"
+output: 
+  github_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Prompt
+
+This assignment is dependent on completion of previous assignment. 
+Objective of this project is to forecast CME seat prices using CME trading
+volume.
+
+Now that you have a monthly time series of CME seat prices, the file
+`Contracts_Volume.csv` contains the monthly trading volume for 
+different CME products.  
+
+Each row has the first date of the following month (the trade volume is 
+for the month), the commodity indicator for CME, the short description of 
+the commodity, whether it is Future (F) or Option (O), 
+the electronic trading volume and the total trading volume. 
+The floor trading volume is the difference between the total 
+volume and the electronic volume.
+
+The file `Contracts_Classification.csv` associates each CME commodity 
+with a seat class.
+
+Note that owning a CME seat gives a trader advantage for floor trading.
+In contrast, owning a CME seat does not have any advantage for electronic
+trading. Since electronic trading constitutes market participants trading
+directly with other participants via CME's network connections and order
+matching engine.
+
+There are three classes of seats CME, IMM, and IOM which confer the 
+rights to trade different sets of commodities traded. 
+CME seat owners can trade everything, IMM seat owners are allowed to 
+trade all futures and options except agricultural products, 
+and IOM seat owners are allowed to trade future and options 
+only in index products and all other CME options.
+
+To find the volume, for example index products, add both the 
+futures and options volume for the same index product for a month.
+
+ 
+Your task is to use the trading volume information to forecast the CME
+monthly seat price for 2013.  It is recommended to do exploratory data
+analysis to find initial data relationships such as correlations. For
+example, the total trade volume for all CME products might be a good
+predictor for CME seat class, but not for the others. 
+You may have to choose and select which commodities have influence on 
+the IMM and IOM seat prices.
+
+The tasks are outlined below.
+
+Task A:
+
+Use the following algorithms:
+
+- Linear regression (seat price is independent, volume(s) dependent)
+- Linear regression with ARMA errors (use arima with xreg)
+- Holt Winters
+- ARIMA
+- Seasonal ARIMA (SARIMA) - here seasonality is monthly
+- Fractional ARIMA (ARFIMA) - check applicability first using the ACF
+- ARMA and GARCH combination - use the fGarch R library and garchFit()
+
+Note that you have to implement each of the above algorithms for each of the 3 classes of seats: CME, IMM, IOM. 
+
+Task B:
+
+Since you already have the seat prices for the 2013,
+evaluate each algorithm from Task A using sMAPE. 
+Which one do you recommend to forecast monthly prices for each of the seat classes?
+
+# Data
+
+## Create Time Serieses
+
+This function is copied over from assignment 7.
+
+```{r, warning=F, message=F}
+cmeS <- read.csv("~/Datasets/31006/cmeS.csv")
+immS <- read.csv("~/Datasets/31006/immS.csv")
+iomS <- read.csv("~/Datasets/31006/iomS.csv")
+
+library(dplyr)
+library(zoo)
+library(ggplot2)
+library(reshape2)
+
+create_timeseries <- function(df_, interpolation='spline') {
+  # Date formatting
+  df_$DateOfSale <- as.Date(df_$DateOfSale, '%m/%d/%Y')
+  df_$yearmon <- as.yearmon(df_$DateOfSale)
+  
+  # Group by month
+  df_ <- df_ %>%
+    group_by(yearmon) %>%
+    summarize(price=mean(price)) %>%
+    data.frame() %>%
+    merge(data.frame(yearmon = as.yearmon(2001 + seq(0, 12*13-1)/12)),all=T)
+  
+  # Interpolate
+  df_$interpolated <- is.na(df_$price)
+  x = df_$yearmon
+  if('constant' %in% interpolation) {
+    df_$constant <- approx(df_$yearmon, df_$price, xout=x, method = "constant")$y  
+  }
+  if('linear' %in% interpolation) {
+    df_$linear <- approx(df_$yearmon, df_$price, xout=x)$y
+  }
+  if('spline' %in% interpolation) {
+    df_$spline <- spline(df_, n=nrow(df_))$y
+  }
+  df_
+}
+
+cmeS <- create_timeseries(cmeS)
+immS <- create_timeseries(immS)
+iomS <- create_timeseries(iomS)
+```
+
+## Contract Volume Data
+
+The new datasets need to be merged in with the time series.
+  1. Contracts Volume
+  2. Contracts Classification
+
+```{r, message=FALSE, echo=FALSE}
+library(stringr)
+
+cv <- read.csv("~/Datasets/31006/Contracts_Volume.csv", stringsAsFactors = F)
+cc <- read.csv("~/Datasets/31006/Contracts_Classification.csv", stringsAsFactors = F)
+
+cv$Electronic.Volume <- str_replace_all(cv$Electronic.Volume, ',', '')
+cv$Electronic.Volume <- as.numeric(cv$Electronic.Volume)
+cv$Floor.Volume <- cv$Total.Volume - cv$Electronic.Volume
+
+df = merge(cv, cc, by.x='Commodity.Indicator', by.y='Commodity.Code', all.x=T)
+
+df$Date <- as.Date(df$Date, '%m/%d/%Y')
+df$yearmon <- as.yearmon(df$Date)
+
+# IMM and IOM can only trade the commodities listed under those seats
+imm_iom_monthly_vol <- df %>% 
+  dplyr::filter(Division %in% c('IMM', 'IOM')) %>%
+  group_by(yearmon, Division) %>%
+  summarize(electric.vol = sum(Electronic.Volume), 
+            total.vol = sum(Total.Volume), 
+            floor.vol=sum(Floor.Volume))
+
+# CME can trade all commodities, not just the ones listed
+cme_monthly_vol <- df %>%
+  group_by(yearmon) %>%
+  summarize(electric.vol = sum(Electronic.Volume), 
+            total.vol = sum(Total.Volume), 
+            floor.vol=sum(Floor.Volume)) %>%
+  mutate(Division = 'CME')
+
+monthly_vol <- rbind(data.frame(cme_monthly_vol), data.frame(imm_iom_monthly_vol))
+
+ggplot(monthly_vol, aes(x=yearmon, y=floor.vol, color=Division)) + 
+  geom_line() + 
+  labs(title='Monthly Floor Volume at the Merch',
+       y='Floor Volume', x='Time')
+```
+
+```{r, warning=F, message=F}
+attach_monthly_vol <- function(ts_df, division, monthly_df = monthly_vol) {
+  monthly_df <- dplyr::filter(monthly_df, Division==division)
+  monthly_df <- select(monthly_df, -Division)
+  left_join(ts_df, monthly_df, by='yearmon')
+}
+
+ts_cmeS_all <- attach_monthly_vol(cmeS, 'CME')
+ts_immS_all <- attach_monthly_vol(immS, 'IMM')
+ts_iomS_all <- attach_monthly_vol(iomS, 'IOM')
+
+head(ts_cmeS_all)
+```
+
+### Train / Test
+
+Before fitting any models, remove the 2013 year from the timeseries objects
+and keep the 2013 year as the values to judge the forecasts.
+
+```{r, warning=F, message=F}
+ts_cmeS_2013 <- dplyr::filter(ts_cmeS_all, yearmon >= 2013)
+ts_immS_2013 <- dplyr::filter(ts_immS_all, yearmon >= 2013)
+ts_iomS_2013 <- dplyr::filter(ts_iomS_all, yearmon >= 2013)
+
+ts_cmeS <- dplyr::filter(ts_cmeS_all, yearmon < 2013)
+ts_immS <- dplyr::filter(ts_immS_all, yearmon < 2013)
+ts_iomS <- dplyr::filter(ts_iomS_all, yearmon < 2013)
+```
+
+# Task A: Fit Models
+
+## Linear Regression 
+
+Seat price is independent, Volume dependent
+
+### CME
+
+```{r, warning=F, message=F}
+lm_cme <- lm(spline ~ floor.vol, data=ts_cmeS)
+summary(lm_cme)
+
+ts_floor_vol_scatter <- function(ts_df, division) {
+  ggplot(ts_df, aes(x=floor.vol, y=spline)) + 
+    geom_point() + 
+    geom_smooth(method='lm') + 
+    labs(title=paste(division, 'Seat Floor Volume vs. Interpolated Price'),
+         subitle='Linear Model')
+}
+
+ts_with_floor_vol_plot <- function(ts_df, division) {
+  X <- ts_df$yearmon
+  Y1 <- ts_df$spline
+  Y2 <- ts_df$floor.vol
+  par(mar = c(5, 5, 3, 5))
+  plot(x=X, y=Y1, type ="l", 
+       ylab = paste("Interpolated Price of",division,"Seat"),
+       main = paste(division, "Seat price & Floor Volume"), 
+       xlab = "Time", xaxt='n',
+       col = "blue")
+  par(new = TRUE)
+  plot(x=X, y=Y2, type = "l", 
+       xaxt = "n", yaxt = "n", ylab = "", xlab = "", 
+       col = "red", lty = 2)
+  axis(side = 4)
+  mtext("Floor Volume", side = 4, line = 3)
+  legend("topleft", c("Seat Price", "Floor Volume"),
+         col = c("blue", "red"), lty = c(1, 2))
+}
+
+ts_floor_vol_scatter(ts_cmeS, 'CME')
+ts_with_floor_vol_plot(ts_cmeS, 'CME')
+```
+
+### IMM
+
+```{r, warning=F, message=F}
+lm_imm <- lm(spline ~ floor.vol, data=ts_immS)
+summary(lm_imm)
+
+ts_floor_vol_scatter(ts_immS, 'IMM')
+ts_with_floor_vol_plot(ts_immS, 'IMM')
+```
+
+### IOM
+
+```{r lm_iom}
+lm_iom <- lm(spline ~ floor.vol, data=ts_iomS)
+summary(lm_iom)
+
+
+ts_floor_vol_scatter(ts_iomS, 'IOM')
+ts_with_floor_vol_plot(ts_iomS, 'IOM')
+```
+
+## Linear Regression with ARIMA Errors
+
+### CME
+
+```{r, warning=F, message=F}
+library(forecast)
+
+lm_arima_cme <- auto.arima(ts_cmeS$spline, xreg=ts_cmeS$floor.vol)
+summary(lm_arima_cme)
+```
+
+### IMM
+
+```{r, warning=F, message=F}
+lm_arima_imm <- auto.arima(ts_immS$spline, xreg=ts_immS$floor.vol)
+summary(lm_arima_imm)
+```
+
+### IOM
+
+```{r, warning=F, message=F}
+lm_arima_iom <- auto.arima(ts_iomS$spline, xreg=ts_iomS$floor.vol)
+summary(lm_arima_iom)
+```
+
+## Holt Winters
+
+### CME
+
+```{r, warning=F, message=F}
+hw_cme <- HoltWinters(ts(ts_cmeS$spline, start=2001, frequency = 12))
+c(hw_cme$alpha, hw_cme$beta, hw_cme$gamma)
+```
+
+### IMM
+
+```{r, warning=F, message=F}
+hw_imm <- HoltWinters(ts(ts_immS$spline, start=2001, frequency = 12))
+c(hw_imm$alpha, hw_imm$beta, hw_imm$gamma)
+```
+
+### IOM 
+
+```{r, warning=F, message=F}
+hw_iom <- HoltWinters(ts(ts_iomS$spline, start=2001, frequency = 12))
+c(hw_iom$alpha, hw_iom$beta, hw_iom$gamma)
+```
+
+## ARIMA
+
+### CME
+
+```{r, warning=F, message=F}
+arima_cme <- auto.arima(ts_cmeS$spline, seasonal = F)
+summary(arima_cme)
+```
+
+```{r, warning=F, message=F}
+auto.arima(ts(ts_cmeS$spline, start=2001, frequency = 12), seasonal = F)
+```
+
+### IMM
+
+```{r, warning=F, message=F}
+arima_imm <- auto.arima(ts_immS$spline, seasonal = F)
+summary(arima_imm)
+```
+
+### IOM 
+
+```{r, warning=F, message=F}
+arima_iom <- auto.arima(ts_iomS$spline, seasonal = F)
+summary(arima_iom)
+```
+
+## Seasonal ARIMA 
+
+Seasonality is monthly
+
+### CME
+
+```{r, warning=F, message=F}
+auto.arima(ts(ts_cmeS$spline, start=2001, frequency = 12))
+```
+
+`auto.arima` won't automatically pick up a seasonal compoment on the CME seat
+version even when putting it into a time series object. So I'll manually fit 
+one.
+
+First plot with a difference and a lagged seasonal (12 month) difference.
+
+```{r, warning=F, message=F}
+ts_cmeS$spline %>% 
+  ts(start=2001, frequency = 12) %>% 
+  diff(lag=12) %>%
+  diff() %>%
+  ggtsdisplay()
+```
+
+```{r, warning=F, message=F}
+ts_cmeS$spline %>%
+  ts(start=2001, frequency = 12) %>% 
+  Arima(order=c(c(0,1,1)), seasonal=c(0,0,1)) %>%
+  residuals() %>%
+  ggtsdisplay()
+```
+
+A significant spike at lag 2 indicates an additional non-seasoanl term is needed.
+
+```{r, warning=F, message=F}
+sarima_cme <- ts_cmeS$spline %>%
+  ts(start=2001, frequency = 12) %>% 
+  Arima(order=c(c(0,1,2)), seasonal=c(0,0,1))
+
+checkresiduals(sarima_cme)
+
+summary(sarima_cme)
+```
+
+That's okay enough I think. It's not great but it's okay.
+
+### IMM
+
+```{r, warning=F, message=F}
+auto.arima(ts(ts_immS$spline, start=2001, frequency = 12))
+```
+
+Ugh not this again. Okay do the same thing as with CME. The ARIMA for this 
+model was of the order c(0,1,1) so start with that plus some seasonality terms.
+
+```{r, warning=F, message=F}
+ts_immS$spline %>%
+  ts(start=2001, frequency = 12) %>% 
+  Arima(order=c(c(0,1,1)), seasonal=c(0,0,1)) %>%
+  residuals() %>%
+  ggtsdisplay()
+```
+
+```{r, warning=F, message=F}
+sarima_imm <- ts_immS$spline %>%
+  ts(start=2001, frequency = 12) %>% 
+  Arima(order=c(c(0,1,1)), seasonal=c(0,0,1))
+
+checkresiduals(sarima_imm)
+
+summary(sarima_imm)
+```
+
+That's fine. This model only needed a c(0,1,1) non-seasonal model where the CME
+series needed a c(0,1,2). I think that's interesting.
+
+### IOM 
+
+```{r, warning=F, message=F}
+auto.arima(ts(ts_iomS$spline, start=2001, frequency = 12))
+```
+
+Swell. This picked up a seaonality term all its own. We'll go with that.
+
+```{r, warning=F, message=F}
+sarima_iom <- ts_iomS$spline %>%
+  ts(start=2001, frequency = 12) %>% 
+  Arima(order=c(c(0,1,1)), seasonal=c(0,0,1))
+
+checkresiduals(sarima_iom)
+
+summary(sarima_iom)
+```
+
+## Fractional ARIMA
+
+Check applicability first using the ACF. If the ACF decays very slowly
+then the series could be a good candidate for an ARFIMA model. ARFIMA models
+are good for detecting long-memory, and lots of autocorrelation at deep
+lags mean that the series has a long memory, or depenence on lots of lagged
+values.
+
+### CME
+
+Simulate a fractional ARIMA and plot the ACF of it against he ACF of the CME
+time series so that it is easy to see if they are similar or dissimilar.
+
+```{r, warning=F, message=F}
+library(fracdiff)
+
+ts.test <- fracdiff.sim( 1000, ar = .55, ma = -.4, d = .3) 
+
+par(mfrow=c(2,1))
+acf(ts.test$series, lag=50)
+acf(ts_cmeS$spline, lag=50)
+```
+
+Looks to me like a slowly decaying ACF plot. Next, fit the ARFIMA.
+
+```{r, warning=F, message=F}
+arfima_cme <- arfima(ts(ts_cmeS$spline, start=2001, frequency = 12))
+
+summary(arfima_cme)
+```
+
+### IMM
+
+```{r, warning=F, message=F}
+acf(ts_immS$spline, lag=50)
+```
+
+```{r, warning=F, message=F}
+arfima_imm <- arfima(ts_immS$spline)
+
+summary(arfima_imm)
+```
+
+### IOM 
+
+```{r, warning=F, message=F}
+acf(ts_iomS$spline, lag=50)
+```
+
+```{r, warning=F, message=F}
+arfima_iom <- arfima(ts_iomS$spline)
+
+summary(arfima_iom)
+```
+
+## ARMA and GARCH combination 
+
+
+GARCH models are used when a time series displays heteroskedasticity, that is,
+non-constant variance. Specifically when the variance of the errors is 
+autocorrelated.
+
+Use the fGarch R library and garchFit()
+
+
+### CME
+
+```{r, warning=F, message=F}
+acf(ts_cmeS$spline)
+acf(ts_cmeS$spline^2)
+```
+
+While the ACF of the time series shows autocorrelation, the ACF of the 
+squared time series shows that the variance might also have autocorrelation.
+
+Visual inspection of the residuals of a fitted ARIMA model shows the
+same thing.
+
+```{r, warning=F, message=F}
+plot(residuals(arima_cme), type='p')
+```
+
+The "accordian" pattern we discussed in class is clear here. The variance in
+the residuals of an ARIMA model is not constant, but varies, and looks to
+be autocorrelated (maybe with an intervention).
+
+### Fitting the God Damn GARCH
+
+Nothing is working right now. I've tried garchFit from fGarch and 
+ugarchfit from rugarch. I've tried different solvers and I've tried winsorizing
+(removing outliers) from the dataset. I keep getting failed to converge or
+failed to invert hessian errors.
+
+```{r, warning=F, message=F}
+library(fGarch)
+library(TSA)
+
+garch_cme <- garchFit(~arma(1,1)+garch(1,1), 
+                      data=ts(ts_cmeS$spline, frequency = 12), 
+                      trace=F)
+summary(garch_cme)
+McLeod.Li.test(y=residuals(garch_cme))
+```
+
+### IMM
+
+```{r, warning=F, message=F}
+# garch_imm <- garchFit(~arma(0,1)+garch(1,1), 
+#                       data=ts(ts_immS$spline, frequency = 12), 
+#                       trace=F)
+# summary(garch_imm)
+# McLeod.Li.test(y=residuals(garch_imm))
+```
+
+### IOM 
+
+```{r, warning=F, message=F}
+# garch_iom <- garchFit(~arma(0,1)+garch(1,1), 
+#                       data=ts(ts_iomS$spline, frequency = 12), 
+#                       trace=F)
+# summary(garch_iom)
+# McLeod.Li.test(y=residuals(garch_iom))
+```
+
+# Task B: Evaluation
+
+Evaluated each model with sMAPE
+
+```{r, warning=F, message=F}
+smape <- function(act, pred) {
+  sm <- abs(act - pred) / ((abs(act) + abs(pred))/2)
+  return(sum(sm, na.rm = T) * 100/length(act))
+}
+
+forecast_2013_plot <- function(df_, col, division, model) {
+  SMAPE <- smape(df_$spline, df_[,col])
+  
+  df_ %>%
+    melt(id.vars='yearmon', measure.vars = c('spline', col)) %>%
+    ggplot(aes(x=yearmon, y=value, color=variable)) + 
+    geom_line() +
+    scale_x_yearmon() + 
+    labs(title=paste(model, 'Forecast for 2013', division, 'Seat Price'),
+         subtitle=paste0('SMAPE: ', round(SMAPE, 1), '%'))
+}
+```
+
+## Linear Regression
+
+```{r, warning=F, message=F}
+ts_cmeS_2013$lm_forecast <- predict(lm_cme, newdata=ts_cmeS_2013)
+forecast_2013_plot(ts_cmeS_2013, 'lm_forecast', 'CME', 'Linear Regression')
+
+ts_immS_2013$lm_forecast <- predict(lm_imm, newdata=ts_immS_2013)
+forecast_2013_plot(ts_immS_2013, 'lm_forecast', 'IMM', 'Linear Regression')
+
+ts_iomS_2013$lm_forecast <- predict(lm_iom, newdata=ts_iomS_2013)
+forecast_2013_plot(ts_iomS_2013, 'lm_forecast', 'IOM', 'Linear Regression')
+
+smape_df <- data.frame(
+  row.names = c('cme', 'imm', 'iom'),
+  Linear.Regression = c(with(ts_iomS_2013, smape(spline, lm_forecast)),
+                        with(ts_immS_2013, smape(spline, lm_forecast)),
+                        with(ts_cmeS_2013, smape(spline, lm_forecast))))
+```
+
+## Regression with ARIMA Errors
+
+```{r, warning=F, message=F}
+ts_cmeS_2013$lm_arima_forecast <- predict(lm_arima_cme, newxreg=ts_cmeS_2013$floor.vol)$pred
+forecast_2013_plot(ts_cmeS_2013, 'lm_arima_forecast', 'CME', 'ARIMA with Regression Errors')
+
+ts_immS_2013$lm_arima_forecast <- predict(lm_arima_imm, newxreg=ts_immS_2013$floor.vol)$pred
+forecast_2013_plot(ts_immS_2013, 'lm_arima_forecast', 'IMM', 'ARIMA with Regression Errors')
+
+ts_iomS_2013$lm_arima_forecast <- predict(lm_arima_iom, newxreg=ts_iomS_2013$floor.vol)$pred
+forecast_2013_plot(ts_iomS_2013, 'lm_arima_forecast', 'IOM', 'ARIMA with Regression Errors')
+
+smape_df$LM.ARIMA <- c(
+  with(ts_cmeS_2013, smape(spline, lm_arima_forecast)),
+  with(ts_immS_2013, smape(spline, lm_arima_forecast)),
+  with(ts_iomS_2013, smape(spline, lm_arima_forecast))
+)
+```
+
+## Holt-Winters
+
+```{r, warning=F, message=F}
+ts_cmeS_2013$hw_forecast <- forecast(hw_cme, h=12)$mean
+forecast_2013_plot(ts_cmeS_2013, 'hw_forecast', 'CME', 'Holt-Winters')
+
+ts_immS_2013$hw_forecast <- forecast(hw_imm, h=12)$mean
+forecast_2013_plot(ts_immS_2013, 'hw_forecast', 'IMM', 'Holt-Winters')
+
+ts_iomS_2013$hw_forecast <- forecast(hw_iom, h=12)$mean
+forecast_2013_plot(ts_iomS_2013, 'hw_forecast', 'IOM', 'Holt-Winters')
+
+smape_df$Holt.Winters <- c(
+  with(ts_cmeS_2013, smape(spline, hw_forecast)),
+  with(ts_immS_2013, smape(spline, hw_forecast)),
+  with(ts_iomS_2013, smape(spline, hw_forecast))
+)
+```
+
+## ARIMA
+
+```{r, message=F, warning=F}
+arima_order <- function(fit_) {
+  order <- setNames(fit_$arma, c("p", "q", "P", "Q", "m", "d", "D"))
+  pdq <- order[c('p','d','q')]
+  PDQ <- order[c('P','D','Q')]
+  
+  name <- paste0("ARIMA(", paste(pdq, collapse=","), ")")
+  
+  if(sum(PDQ) > 0) {
+    name <- paste0(name, "(", paste(PDQ, collapse=","), ")", "[", order['m'], "]")
+  }
+  return(name)
+}
+
+
+ts_cmeS_2013$arima_forecast <- forecast(arima_cme, h=12)$mean
+forecast_2013_plot(ts_cmeS_2013, 'arima_forecast', 'CME', arima_order(arima_cme))
+
+ts_immS_2013$arima_forecast <- forecast(arima_imm, h=12)$mean
+forecast_2013_plot(ts_immS_2013, 'arima_forecast', 'IMM', arima_order(arima_imm))
+
+ts_iomS_2013$arima_forecast <- forecast(arima_iom, h=12)$mean
+forecast_2013_plot(ts_iomS_2013, 'arima_forecast', 'IOM', arima_order(arima_iom))
+
+smape_df$ARIMA <- c(
+  with(ts_cmeS_2013, smape(spline, arima_forecast)),
+  with(ts_immS_2013, smape(spline, arima_forecast)),
+  with(ts_iomS_2013, smape(spline, arima_forecast))
+)
+```
+
+## Seasonal ARIMA
+
+```{r, warning=F, warning=F}
+ts_cmeS_2013$sarima_forecast <- forecast(sarima_cme, h=12)$mean
+forecast_2013_plot(ts_cmeS_2013, 'sarima_forecast', 'CME', arima_order(sarima_cme))
+
+ts_immS_2013$sarima_forecast <- forecast(sarima_imm, h=12)$mean
+forecast_2013_plot(ts_immS_2013, 'sarima_forecast', 'IMM', arima_order(sarima_imm))
+
+ts_iomS_2013$sarima_forecast <- forecast(sarima_iom, h=12)$mean
+forecast_2013_plot(ts_iomS_2013, 'sarima_forecast', 'IOM', arima_order(sarima_iom))
+
+smape_df$SARIMA <- c(
+  with(ts_cmeS_2013, smape(spline, sarima_forecast)),
+  with(ts_immS_2013, smape(spline, sarima_forecast)),
+  with(ts_iomS_2013, smape(spline, sarima_forecast))
+)
+```
+
+## Fractional ARIMA
+
+```{r, warning=F, message=F}
+ts_cmeS_2013$arfima_forecast <- forecast(arfima_cme, h=12)$mean
+forecast_2013_plot(ts_cmeS_2013, 'arfima_forecast', 'CME', 'ARFIMA')
+
+ts_immS_2013$arfima_forecast <- forecast(arfima_imm, h=12)$mean
+forecast_2013_plot(ts_immS_2013, 'arfima_forecast', 'IMM', 'ARFIMA')
+
+ts_iomS_2013$arfima_forecast <- forecast(arfima_iom, h=12)$mean
+forecast_2013_plot(ts_iomS_2013, 'arfima_forecast', 'IOM', 'ARFIMA')
+
+smape_df$ARFIMA <- c(
+  with(ts_cmeS_2013, smape(spline, arfima_forecast)),
+  with(ts_immS_2013, smape(spline, arfima_forecast)),
+  with(ts_iomS_2013, smape(spline, arfima_forecast))
+)
+```
+
+## Garch
+
+```{r, warning=F, message=F}
+ts_cmeS_2013$garch_forecast <- predict(garch_cme, 12)$meanForecast
+forecast_2013_plot(ts_cmeS_2013, 'garch_forecast', 'CME', 'GARCH')
+
+#ts_cmeS_2013$garch_forecast <- predict(garch_imm, 12)$meanForecast
+#forecast_2013_plot(ts_immS_2013, 'garch_forecast', 'IMM', 'GARCH')
+
+#ts_cmeS_2013$garch_forecast <- predict(garch_iom, 12)$meanForecast
+#forecast_2013_plot(ts_iomS_2013, 'garch_forecast', 'IOM', 'GARCH')
+
+smape_df$GARCH <- c(
+  with(ts_cmeS_2013, smape(spline, garch_forecast)),
+  NA,#with(ts_immS_2013, smape(spline, arfima_forecast))
+  NA #with(ts_iomS_2013, smape(spline, arfima_forecast))
+)
+```
+
+# Recommendation
+
+```{r, warning=F, message=F}
+data.frame(t(smape_df))
+```
+
+I would recommend seasonal ARIMA. While ARIMA did slighly better on the 
+SMAPE metric, it just predicted point forecasts which is silly.
