@@ -44,6 +44,8 @@ install.packages(
     "tseries",
     "forecast",
     "TSA",
+    "prophet",
+    "tscount",
     "arifma",
     "MTS",
     "astsa",
