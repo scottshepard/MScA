@@ -17,3 +17,5 @@ textblob
 regex
 gensim
 pyLDAvis
+afinn
+vaderSentiment
