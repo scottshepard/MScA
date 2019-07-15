@@ -8,6 +8,9 @@ statsmodels
 matplotlib
 pydot
 seaborn
+GraphViz
+
+# Deep Learning
 keras
 tensorflow
 sklearn
