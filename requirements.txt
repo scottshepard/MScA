@@ -6,6 +6,7 @@ beautifulsoup4
 requests
 statsmodels
 matplotlib
+pydot
 seaborn
 keras
 tensorflow
