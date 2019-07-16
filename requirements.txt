@@ -19,3 +19,6 @@ gensim
 pyLDAvis
 afinn
 vaderSentiment
+
+# RL
+gym
