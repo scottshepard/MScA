@@ -27,7 +27,7 @@ pydot
 
 # Images
 imageio
-
+tifffile
 # NLP
 nltk
 textblob
