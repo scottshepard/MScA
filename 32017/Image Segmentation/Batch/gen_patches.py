@@ -1,6 +1,37 @@
 import random
 import numpy as np
 
+def rand_rot(img, msk):
+    """
+    Given an image and a mask, randomly augment the data by either
+    0. Do nothing
+    1. Transpose
+    2. Flip about x-axis
+    3. Flip about y-axis
+    4. Transpose then flip about x
+    5. Transpose then flip about y
+    The mask and the image must be augmened in the same way
+    """
+    i = random.randint(0, 5)
+    if i == 0:
+        img_rot = img
+        msk_rot = msk
+    if i == 1:
+        img_rot = img.transpose(1,0,2)
+        msk_rot = msk.transpose(1,0,2)
+    elif i == 3:
+        img_rot = img[:,::-1,:]
+        msk_rot = msk[:,::-1,:]
+    elif i == 4:
+        img_rot = img[::-1,:,:]
+        msk_rot = msk[::-1,:,:]
+    elif i == 5:
+        img_rot = img.transpose(1,0,2)[:,::-1,:]
+        msk_rot = msk.transpose(1,0,2)[:,::-1,:]
+    elif i == 5:
+        img_rot = img.transpose(1,0,2)[::-1,:,:]
+        msk_rot = msk.transpose(1,0,2)[::-1,:,:]
+    return img_rot, msk_rot
 
 def get_rand_patch(img, mask, sz=160):
     """
@@ -14,7 +45,7 @@ def get_rand_patch(img, mask, sz=160):
     yc = random.randint(0, img.shape[1] - sz)
     patch_img = img[xc:(xc + sz), yc:(yc + sz)]
     patch_mask = mask[xc:(xc + sz), yc:(yc + sz)]
-    return patch_img, patch_mask
+    return rand_rot(patch_img, patch_mask)
 
 
 def get_patches(x_dict, y_dict, n_patches, sz=160):
