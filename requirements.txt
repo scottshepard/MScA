@@ -21,4 +21,8 @@ afinn
 vaderSentiment
 
 # RL
+pyglet==1.2.4
 gym
+networkx
+protobuf
+
