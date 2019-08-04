@@ -35,3 +35,13 @@ oversampled.
 
     TRAIN_SZ = 16000 
     VAL_SZ = 4000    
+
+I got a logloss of 0.34 for a score of 78%
+
+Not much of an improvement.
+
+## Attempt 3
+
+Adding batch normalization and dropout layers to each level both down and up
+the UNet.
+
