@@ -16,16 +16,16 @@ def rand_rot(img, msk):
     if i == 0:
         img_rot = img
         msk_rot = msk
-    if i == 1:
+    elif i == 1:
         img_rot = img.transpose(1,0,2)
         msk_rot = msk.transpose(1,0,2)
-    elif i == 3:
+    elif i == 2:
         img_rot = img[:,::-1,:]
         msk_rot = msk[:,::-1,:]
-    elif i == 4:
+    elif i == 3:
         img_rot = img[::-1,:,:]
         msk_rot = msk[::-1,:,:]
-    elif i == 5:
+    elif i == 4:
         img_rot = img.transpose(1,0,2)[:,::-1,:]
         msk_rot = msk.transpose(1,0,2)[:,::-1,:]
     elif i == 5:
