@@ -29,14 +29,7 @@ My first change will be by editing the `get_rand_patch()` function. As suggested
 by the project instructions, I've edited this function to randomly rotate the 
 selected patch and mask after selection but before sending it to training.
 
-Since there are 5 potential transformations, I can up the patch selection by a 
-factor of 5. For speed's sake I'll only do 4. That way some patches won't be
-oversampled.
-
-    TRAIN_SZ = 16000 
-    VAL_SZ = 4000    
-
-I got a logloss of 0.34 for a score of 78%
+I got a logloss of 0.35 for a score of 78%
 
 Not much of an improvement.
 
@@ -44,4 +37,17 @@ Not much of an improvement.
 
 Adding batch normalization and dropout layers to each level both down and up
 the UNet.
+
+Weighted logloss 0.347886 score of 79%
+
+## Improved Prections
+
+At this point it made sense to write the prediction algorithm to predict on 23 
+images and test on the 24th before training on the entire set and then looking
+at the test file.
+
+## Attempt 4
+
+
+
 
