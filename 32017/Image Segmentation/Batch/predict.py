@@ -70,10 +70,10 @@ def picture_from_mask(mask, threshold=0):
 if __name__ == '__main__':
     model = get_model()
     model.load_weights(weights_path)
-    test_id = 'test'
+    test_id = '24'
     img = normalize(tiff.imread('data/mband/{}.tif'.format(test_id)).transpose([1,2,0]))   # make channels last
     mask = predict(img, model, patch_sz=PATCH_SZ, n_classes=N_CLASSES).transpose([2,0,1])  # make channels first
     map = picture_from_mask(mask, 0.5)
 
-    tiff.imsave('result.tif', (255*mask).astype('uint8'))
-    tiff.imsave('map.tif', map)
+    tiff.imsave('result24_2.tif', (255*mask).astype('uint8'))
+    tiff.imsave('map24_2.tif', map)

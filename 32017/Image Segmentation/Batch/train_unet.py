@@ -37,7 +37,7 @@ if not os.path.exists(weights_path):
     os.makedirs(weights_path)
 weights_path += '/unet_weights.hdf5'
 
-trainIds = [str(i).zfill(2) for i in range(1, 25)]  # all availiable ids: from "01" to "24"
+trainIds = [str(i).zfill(2) for i in range(1, 24)]  # all availiable ids: from "01" to "24"
 
 
 if __name__ == '__main__':
