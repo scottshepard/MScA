@@ -25,16 +25,31 @@ def epsilon_greedy(q_values, epsilon, n_outputs):
 def mean_q(y_true, y_pred):
     return K.mean(K.max(y_pred, axis=-1))
 
+def get_state(obs):
+    v = []
+    x,y = obs['player']
+    v.append(x)
+    v.append(y)
+    for x, y in obs['monsters']:
+        v.append(x)
+        v.append(y)
+    for x, y in obs['diamonds']:
+        v.append(x)
+        v.append(y)
+    for x, y in obs['walls']:
+        v.append(x)
+        v.append(y)
+    return v
 
 class QLearn:
 
     def __init__(self, env):
 
         self.env = env
-        self.obs = self.env.reset()
-
-        self.input_shape = self.obs.shape
-        self.nb_actions = self.env.action_space.n
+        obs = self.env.reset()
+        state = get_state(obs)
+        self.input_shape = (len(state),)
+        self.nb_actions = 9
         self.dense_layers = 5
         self.dense_units = 256
 
@@ -57,12 +72,12 @@ class QLearn:
         return model
 
     def train(self):
-        name = 'MsPacman_DQN'  # used in naming files (weights, logs, etc)
-        n_steps = 10000        # total number of training steps (= n_epochs)
-        warmup = 1000          # start training after warmup iterations
-        training_interval = 4  # period (in actions) between training steps
-        save_steps = int(n_steps/10)  # period (in training steps) between storing weights to file
-        copy_steps = 100       # period (in training steps) between updating target_network weights
+        name = 'MiniPacman'  # used in naming files (weights, logs, etc)
+        n_steps = 100000        # total number of training steps (= n_epochs)
+        warmup = 10000          # start training after warmup iterations
+        training_interval = 400  # period (in actions) between training steps
+        save_steps = int(n_steps/100)  # period (in training steps) between storing weights to file
+        copy_steps = 1000       # period (in training steps) between updating target_network weights
         gamma = 0.9            # discount rate
         skip_start = 90        # skip the start of every game (it's just freezing time before game starts)
         batch_size = 64        # size of minibatch that is taken randomly from replay memory every training step
@@ -93,14 +108,17 @@ class QLearn:
 
         episode_scores = []  # collect total scores in this list and log it later
 
+        obs = self.env.reset()
+        obs['end_game'] = True
         while step < n_steps:
-            if done:  # game over, restart it
-                obs = env.reset()
+            if obs['end_game']:
+                obs = self.env.reset()
                 score = 0  # reset score for current episode
-                for skip in range(skip_start):  # skip the start of each game (it's just freezing time before game starts)
-                    obs, reward, done, info = env.step(0)
-                    score += reward
-                state = obs
+                # for skip in range(skip_start):  # skip the start of each game (it's just freezing time before game starts)
+                #     obs = self.env.make_action(0)
+                #     reward = obs['reward']
+                #     score += reward
+                state = get_state(obs)
                 episodes += 1
 
             # Online network evaluates what to do
@@ -110,13 +128,14 @@ class QLearn:
             epsilon = max(eps_min, eps_max - (eps_max-eps_min) * step/eps_decay_steps)
             action = epsilon_greedy(q_values, epsilon, self.nb_actions)
             # Play:
-            obs, reward, done, info = env.step(action)
+            obs = self.env.make_action(action + 1)
+            reward = obs['reward']
             score += reward
-            if done:
+            if obs['end_game']:
                 episode_scores.append(score)
-            next_state = obs
+            next_state = get_state(obs)
             # Let's memorize what just happened
-            self.replay_memory.append((state, action, reward, next_state, done))
+            self.replay_memory.append((state, action, reward, next_state, obs['end_game']))
             state = next_state
 
             if iteration >= warmup and iteration % training_interval == 0:
@@ -158,18 +177,30 @@ class QLearn:
         self.online_network.save_weights(os.path.join(weights_folder, 'weights_last.h5f'))
 
 
-    def dqn_strategy(self, obs, eps=0.05):
-        q_values = self.online_network.predict(np.array([obs]))[0]
-        return epsilon_greedy(q_values, eps, self.nb_actions)
+    def dqn_strategy(self, obs):
+        state = get_state(obs)
+        q_values = self.online_network.predict(np.array([state]))[0]
+        return epsilon_greedy(q_values, 0.05, self.nb_actions) + 1
 
 if __name__ == "__main__":
+    import json
+    from mini_pacman import PacmanGame
+    from mini_pacman import test, random_strategy, naive_strategy
 
-    env = gym.make("MsPacman-ram-v0")
-    qlearn = QLearn(env)
-    # qlearn.train()
-    pdb.set_trace()
+    with open('test_params.json', 'r') as file:
+        read_params = json.load(file)
+    game_params = read_params['params']
+    env = PacmanGame(**game_params)
 
-    qlearn.online_network.load_weights(os.path.join(weights_folder, 'weights_last.h5f'))
+    DQN = QLearn(env)
+
+    DQN.train()
+    # pdb.set_trace()
+
+    weights_folder = 'MiniPacman/weights' 
+    DQN.online_network.load_weights(os.path.join(weights_folder, 'weights_last.h5f'))
+
+    test(strategy=DQN.dqn_strategy, log_file='test_pacman_log_DQN_2.json')
 
 
 
