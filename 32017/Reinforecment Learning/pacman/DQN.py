@@ -14,8 +14,6 @@ from keras.callbacks import CSVLogger, TensorBoard
 from keras.optimizers import Adam
 import keras.backend as K
 
-import gym
-
 def epsilon_greedy(q_values, epsilon, n_outputs):
     if random.random() < epsilon:
         return random.randrange(n_outputs)  # random action
@@ -71,23 +69,23 @@ class QLearn:
         model.add(Dense(nb_actions, activation='linear'))
         return model
 
-    def train(self):
-        name = 'MiniPacman'  # used in naming files (weights, logs, etc)
-        n_steps = 100000        # total number of training steps (= n_epochs)
-        warmup = 10000          # start training after warmup iterations
-        training_interval = 400  # period (in actions) between training steps
-        save_steps = int(n_steps/100)  # period (in training steps) between storing weights to file
-        copy_steps = 1000       # period (in training steps) between updating target_network weights
-        gamma = 0.9            # discount rate
-        skip_start = 90        # skip the start of every game (it's just freezing time before game starts)
-        batch_size = 64        # size of minibatch that is taken randomly from replay memory every training step
-        double_dqn = False     # whether to use Double-DQN approach or simple DQN (see above)
-        # eps-greedy parameters: we slowly decrease epsilon from eps_max to eps_min in eps_decay_steps
-        eps_max = 1.0
-        eps_min = 0.05
-        eps_decay_steps = int(n_steps/2)
+    def train(self, 
+              name, 
+              n_steps, # total number of training steps (= n_epochs)
+              warmup,  # start training after warmup iterations
+              training_interval, # period (in actions) between training steps
+              copy_steps, # period (in training steps) between updating target_network weights
+              gamma, # discount rate
+              skip_start, # skip the start of every game (it's just freezing time before game starts)
+              batch_size, # size of minibatch that is taken randomly from replay memory every training step
+              double_dqn, # whether to use Double-DQN approach or simple DQN (see above)
+              eps_max, 
+              eps_min, 
+              learning_rate
+              ):
 
-        learning_rate = 0.001
+        save_steps = int(n_steps/100)  # period (in training steps) between storing weights to file
+        eps_decay_steps = int(n_steps/2)
 
         self.online_network.compile(optimizer=Adam(learning_rate), loss='mse', metrics=[mean_q])
 
@@ -184,6 +182,7 @@ class QLearn:
 
 if __name__ == "__main__":
     import json
+    import config
     from mini_pacman import PacmanGame
     from mini_pacman import test, random_strategy, naive_strategy
 
@@ -194,14 +193,23 @@ if __name__ == "__main__":
 
     DQN = QLearn(env)
 
-    DQN.train()
-    # pdb.set_trace()
+    train_params = config.training_params_local # change to rcc for real training
 
-    weights_folder = 'MiniPacman/weights' 
+    DQN.train(
+        name = train_params['name'],
+        n_steps = train_params['n_steps'],
+        warmup = train_params['warmup'],
+        training_interval = train_params['training_interval'],
+        copy_steps = train_params['copy_steps'],
+        gamma = train_params['gamma'],
+        skip_start = train_params['skip_start'],
+        batch_size = train_params['batch_size'],
+        double_dqn = train_params['double_dqn'],
+        eps_max = train_params['eps_max'],
+        eps_min = train_params['eps_min'], 
+        learning_rate = train_params['learning_rate'])
+
+    weights_folder = os.path.join(train_params['name'], 'weights')
     DQN.online_network.load_weights(os.path.join(weights_folder, 'weights_last.h5f'))
 
-    test(strategy=DQN.dqn_strategy, log_file='test_pacman_log_DQN_2.json')
-
-
-
-
+    test(strategy=DQN.dqn_strategy, log_file='test_pacman_log_DQN_local_2.json')
