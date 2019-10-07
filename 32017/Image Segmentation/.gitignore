@@ -1,0 +1,3 @@
+*.csv
+*.hdf5
+tensorboard_simple_unet/*
