@@ -1,16 +1,33 @@
+# Jupyter
 jupyter
+ipykernel
+
+# Data Structures
 numpy
 pandas
-scipy
+
+# Web Scraping
 beautifulsoup4
 requests
+
+# Machine Learning
+scipy
+sklearn
 statsmodels
+
+# Plotting
 matplotlib
 seaborn
+
+# Deep Learning
 keras
 tensorflow
-sklearn
+GraphViz
+pydot
 
+# Images
+imageio
+tifffile
 # NLP
 nltk
 textblob
