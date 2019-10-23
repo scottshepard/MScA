@@ -28,6 +28,8 @@ pydot
 # Images
 imageio
 tifffile
+scikit-image
+
 # NLP
 nltk
 textblob
