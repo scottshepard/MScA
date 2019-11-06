@@ -28,6 +28,7 @@ pydot
 # Images
 imageio
 tifffile
+
 # NLP
 nltk
 textblob
@@ -36,6 +37,7 @@ gensim
 pyLDAvis
 afinn
 vaderSentiment
+spacy
 
 # RL
 pyglet==1.2.4
