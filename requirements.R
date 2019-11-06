@@ -49,7 +49,10 @@ install.packages(
     "arifma",
     "MTS",
     "astsa",
-    "fGarch"
+    "fGarch",
+    
+    # Experimental Design
+    "AlgDesign"
   ),
   repos='http://cran.us.r-project.org'
 )
