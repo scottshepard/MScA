@@ -16,7 +16,7 @@ class Camera:
         self.camera = picamera.PiCamera(resolution=resolution)
         self.save_path = save_path
 
-    def take_pictures(self, left_speed, right_speed, i=1):
+    def take_pictures(self, left_speed, right_speed, n=1):
         for i in range(n):
             imageinx = datetime.now().strftime('%m%d%Y%H%M%S')
             imagename = self.save_path + 'image_{0}_{1}_{2}.jpeg'.format(imageinx, left_speed, right_speed)
