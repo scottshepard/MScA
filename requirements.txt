@@ -38,6 +38,7 @@ gensim
 pyLDAvis
 afinn
 vaderSentiment
+spacy
 
 # RL
 pyglet==1.2.4
