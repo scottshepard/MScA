@@ -4,6 +4,7 @@
 .Ruserdata
 .DS_Store
 .ipynb_checkpoints/
+.idea/*
 __pycache__/
 imgs/
 venv/
